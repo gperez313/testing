@@ -1,0 +1,8 @@
+{
+  "name": "Ninpo Snacks",
+  "description": "On-demand commerce + logistics web application with reverse logistics (bottle returns) and a React Native mobile companion.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

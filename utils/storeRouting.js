@@ -1,0 +1,358 @@
+// Store selection and multi-waypoint routing for shopping runs
+import Store from '../models/Store.js';
+import StoreInventory from '../models/StoreInventory.js';
+import Product from '../models/Product.js';
+import mongoose from 'mongoose';
+import { getStoreOpenStatus, isStoreOpen } from './storeHours.js';
+
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
+
+const resolveProductForCartItem = async (productId) => {
+  const candidate = String(productId || '').trim();
+  if (!candidate) return null;
+
+  if (mongoose.Types.ObjectId.isValid(candidate)) {
+    const byId = await Product.findById(candidate).lean();
+    if (byId) return byId;
+  }
+
+  return Product.findOne({ frontendId: candidate }).lean();
+};
+
+/**
+ * Find cheapest stores to fulfill a cart
+ * @param {Array} cartItems - [{ productId, quantity }]
+ * @returns {Object} { storePlans, unfulfilled }
+ */
+export const findCheapestStores = async (cartItems, options = {}) => {
+  const storePlans = new Map(); // storeId -> { items: [], totalCost: 0 }
+  const unfulfilled = [];
+  const requestTimestamp = options.timestamp ?? new Date();
+  const requestTimeZone = options.timeZone ?? null;
+  const resolvePrice = inventory => (
+    Number.isFinite(inventory.observedPrice) ? inventory.observedPrice : inventory.cost
+  );
+
+  for (const item of cartItems) {
+    const product = await resolveProductForCartItem(item.productId);
+    if (!product) {
+      unfulfilled.push({ ...item, reason: 'Product not found' });
+      continue;
+    }
+
+    // Find all stores that carry this product
+    const inventory = await StoreInventory.find({
+      productId: product._id,
+      available: true
+    })
+      .populate('storeId')
+      .lean();
+
+    if (inventory.length === 0) {
+      unfulfilled.push({
+        ...item,
+        productName: product.name,
+        reason: 'Not available at any store'
+      });
+      continue;
+    }
+
+    const inventoryWithStatus = inventory.map(entry => {
+      const storeHours = entry.storeId?.hours;
+      const status = getStoreOpenStatus({
+        hours: storeHours,
+        timestamp: requestTimestamp,
+        timeZone: requestTimeZone ?? storeHours?.timezone
+      });
+      return { ...entry, storeOpenStatus: status };
+    });
+
+    const openInventory = inventoryWithStatus.filter(entry => entry.storeOpenStatus.isOpen);
+
+    if (openInventory.length === 0) {
+      const nextOpen = inventoryWithStatus
+        .map(entry => entry.storeOpenStatus.nextOpen)
+        .find(Boolean) || null;
+      unfulfilled.push({
+        ...item,
+        productName: product.name,
+        reason: 'No open stores available',
+        nextOpen
+      });
+      continue;
+    }
+
+    const cheapest = openInventory.reduce((min, curr) =>
+      resolvePrice(curr) < resolvePrice(min) ? curr : min
+    );
+    const availability = { status: 'open' };
+    const basisPrice = resolvePrice(cheapest);
+
+    const storeId = cheapest.storeId._id.toString();
+    
+    if (!storePlans.has(storeId)) {
+      storePlans.set(storeId, {
+        storeId: cheapest.storeId._id,
+        storeName: cheapest.storeId.name,
+        storeType: cheapest.storeId.storeType,
+        location: cheapest.storeId.location,
+        items: [],
+        totalCost: 0,
+        availability: {
+          status: availability.status
+        }
+      });
+    }
+
+    const plan = storePlans.get(storeId);
+    plan.items.push({
+      productId: product.frontendId,
+      productName: product.name,
+      quantity: item.quantity,
+      cost: cheapest.cost,
+      markup: cheapest.markup,
+      observedPrice: cheapest.observedPrice,
+      basisPrice,
+      itemTotal: basisPrice * item.quantity,
+      availability
+    });
+    plan.totalCost += basisPrice * item.quantity;
+  }
+
+  return {
+    storePlans: Array.from(storePlans.values()),
+    unfulfilled
+  };
+};
+
+/**
+ * Optimize store selection (prefer single store when possible)
+ * @param {Object} fulfillmentResult - from findCheapestStores
+ * @returns {Object} Optimized plan
+ */
+export const optimizeStoreSelection = async (fulfillmentResult, options = {}) => {
+  const { storePlans } = fulfillmentResult;
+  const resolveItemPrice = item => (
+    Number.isFinite(item.observedPrice) ? item.observedPrice : item.cost
+  );
+  const requestTimestamp = options.timestamp ?? new Date();
+  const requestTimeZone = options.timeZone ?? null;
+
+  if (storePlans.length <= 1) {
+    return fulfillmentResult; // Already optimal
+  }
+
+  // Strategy: Check if primary store (most items) can cover everything at reasonable cost
+  const primaryStore = storePlans.reduce((max, curr) => 
+    curr.items.length > max.items.length ? curr : max
+  );
+
+  const primaryStoreId = primaryStore.storeId;
+  const otherItems = storePlans
+    .filter(p => p.storeId.toString() !== primaryStoreId.toString())
+    .flatMap(p => p.items);
+
+  // Check if primary store has these items
+  const canConsolidate = await Promise.all(
+    otherItems.map(async (item) => {
+      const product = await resolveProductForCartItem(item.productId);
+      if (!product) return null;
+      const alt = await StoreInventory.findOne({
+        storeId: primaryStoreId,
+        productId: product._id,
+        available: true
+      })
+        .populate('storeId')
+        .lean();
+      
+      if (!alt) return null;
+      const storeHours = alt.storeId?.hours;
+      if (!isStoreOpen({
+        hours: storeHours,
+        timestamp: requestTimestamp,
+        timeZone: requestTimeZone ?? storeHours?.timezone
+      })) {
+        return null;
+      }
+      
+      // Accept if price difference is < 15%
+      const altBasisPrice = Number.isFinite(alt.observedPrice) ? alt.observedPrice : alt.cost;
+      const itemBasisPrice = resolveItemPrice(item);
+      if (itemBasisPrice <= 0) {
+        return {
+          consolidatable: false,
+          reason: 'Invalid basis price for comparison',
+          item
+        };
+      }
+      const priceDiff = ((altBasisPrice - itemBasisPrice) / itemBasisPrice) * 100;
+      if (priceDiff > 15) return null;
+      
+      return {
+        consolidatable: true,
+        item: { 
+          ...item, 
+          productId: product.frontendId,
+          cost: alt.cost, 
+          markup: alt.markup,
+          observedPrice: alt.observedPrice,
+          basisPrice: altBasisPrice,
+          itemTotal: altBasisPrice * item.quantity,
+          availability: { status: 'open' }
+        }
+      };
+    })
+  );
+
+  const allConsolidated = canConsolidate.every(entry => entry && entry.consolidatable);
+
+  if (allConsolidated) {
+    const consolidatedItems = canConsolidate
+      .filter(entry => entry && entry.consolidatable)
+      .map(entry => entry.item);
+    // Use single store
+    return {
+      storePlans: [{
+        ...primaryStore,
+        items: [...primaryStore.items, ...consolidatedItems],
+        totalCost: primaryStore.totalCost + consolidatedItems.reduce((sum, item) => {
+          return sum + (resolveItemPrice(item) * item.quantity);
+        }, 0)
+      }],
+      unfulfilled: fulfillmentResult.unfulfilled,
+      consolidated: true
+    };
+  }
+
+  // Keep original multi-store plan
+  return { ...fulfillmentResult, consolidated: false };
+};
+
+/**
+ * Calculate route with multiple waypoints (hub -> stores -> customers)
+ * @param {Array} storeStops - [{ location: { lat, lng } }] - First should be hub
+ * @param {Array} customerAddresses - [{ lat, lng }] or address strings
+ * @returns {Object} { distance, duration, route }
+ */
+export const calculateMultiStopRoute = async (storeStops, customerAddresses) => {
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error('Google Maps API key not configured');
+  }
+
+  if (!storeStops || storeStops.length === 0) {
+    throw new Error('Store stops required');
+  }
+
+  // First stop is the hub (origin)
+  const hub = storeStops[0];
+  const origin = `${hub.location.lat},${hub.location.lng}`;
+  
+  // Last customer is destination
+  const lastCustomer = customerAddresses[customerAddresses.length - 1];
+  const destination = typeof lastCustomer === 'string' 
+    ? lastCustomer 
+    : `${lastCustomer.lat},${lastCustomer.lng}`;
+  
+  // Middle waypoints: remaining stores + intermediate customers
+  const waypoints = [
+    ...storeStops.slice(1).map(s => `${s.location.lat},${s.location.lng}`),
+    ...customerAddresses.slice(0, -1).map(c => 
+      typeof c === 'string' ? c : `${c.lat},${c.lng}`
+    )
+  ].join('|');
+
+  const url = new URL('https://maps.googleapis.com/maps/api/directions/json');
+  url.searchParams.set('origin', origin);
+  url.searchParams.set('destination', destination);
+  if (waypoints) {
+    url.searchParams.set('waypoints', `optimize:true|${waypoints}`);
+  }
+  url.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+
+  try {
+    const response = await fetch(url.toString());
+    const data = await response.json();
+
+    if (data.status !== 'OK' || !data.routes || data.routes.length === 0) {
+      throw new Error(`Route calculation failed: ${data.status}`);
+    }
+
+    const route = data.routes[0];
+    const leg = route.legs[0];
+
+    // Sum all legs
+    const totalDistance = route.legs.reduce((sum, l) => sum + l.distance.value, 0) / 1609.34; // meters to miles
+    const totalDuration = route.legs.reduce((sum, l) => sum + l.duration.value, 0) / 60; // seconds to minutes
+
+    return {
+      distance: Math.round(totalDistance * 10) / 10,
+      duration: Math.round(totalDuration),
+      route: route.legs.map((l, i) => ({
+        from: l.start_address,
+        to: l.end_address,
+        distance: Math.round(l.distance.value / 1609.34 * 10) / 10,
+        duration: Math.round(l.duration.value / 60)
+      }))
+    };
+  } catch (error) {
+    console.error('Multi-stop route calculation failed:', error);
+    throw error;
+  }
+};
+
+/**
+ * Calculate simple nearest-neighbor route order
+ * (Heuristic alternative to Google optimization)
+ * @param {Object} hubLocation - { lat, lng }
+ * @param {Array} stops - [{ address, location: {lat, lng} }]
+ * @returns {Array} Ordered stops
+ */
+export const orderStopsNearestNeighbor = (hubLocation, stops) => {
+  if (stops.length <= 1) return stops;
+
+  const ordered = [];
+  let current = { location: hubLocation };
+  const remaining = [...stops];
+
+  while (remaining.length > 0) {
+    // Find nearest stop to current position
+    let nearestIndex = 0;
+    let nearestDist = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const dist = haversineDistance(current.location, remaining[i].location);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIndex = i;
+      }
+    }
+
+    const nearest = remaining.splice(nearestIndex, 1)[0];
+    ordered.push(nearest);
+    current = nearest;
+  }
+
+  return ordered;
+};
+
+/**
+ * Haversine distance between two lat/lng points
+ */
+function haversineDistance(coord1, coord2) {
+  const R = 3959; // Earth radius in miles
+  const dLat = (coord2.lat - coord1.lat) * Math.PI / 180;
+  const dLng = (coord2.lng - coord1.lng) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(coord1.lat * Math.PI / 180) * Math.cos(coord2.lat * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+export default {
+  findCheapestStores,
+  optimizeStoreSelection,
+  calculateMultiStopRoute,
+  orderStopsNearestNeighbor
+};
