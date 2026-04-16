@@ -21,9 +21,14 @@ import storeRoutes from './routes/stores.js';
 import inventoryRoutes from './routes/store-inventory.js';
 import receiptRoutes from './routes/receipts.js';
 import uploadRoutes from './routes/uploads.js';
+import itemsNotFoundRoutes from './routes/items-not-found.js';
+import driverRoutes from './routes/driver.js';
+import priceIntelligenceRoutes from './routes/price-intelligence.js';
+import bottleReturnRoutes from './routes/bottle-returns.js';
+import returnRoutes from './routes/returns.js';
+import cashPayoutRoutes from './routes/cash-payouts.js';
 
 import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
 import { initSocket } from './services/socketService.js';
 
 dotenv.config();
@@ -64,6 +69,12 @@ async function startServer() {
   app.use('/api/inventory', inventoryRoutes);
   app.use('/api/receipts', receiptRoutes);
   app.use('/api/uploads', uploadRoutes);
+  app.use('/api/driver', itemsNotFoundRoutes);
+  app.use('/api/driver', driverRoutes);
+  app.use('/api/price-intelligence', priceIntelligenceRoutes);
+  app.use('/api/bottle-returns', bottleReturnRoutes);
+  app.use('/api/returns', returnRoutes);
+  app.use('/api/cash-payouts', cashPayoutRoutes);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

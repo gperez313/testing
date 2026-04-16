@@ -7,8 +7,11 @@ interface NotFoundItem {
   quantity: number;
   price: number;
   originalStore: string;
+  originalStoreAddress?: string;
   attemptedStores: string[];
+  attemptedStoreAddresses?: string[];
   foundAt?: string;
+  foundAtAddress?: string;
 }
 
 interface ItemNotFoundTrackerProps {
@@ -144,7 +147,10 @@ const ItemNotFoundTracker: React.FC<ItemNotFoundTrackerProps> = ({
                         </div>
                         <p className="text-xs text-white/50 ml-6">x{item.quantity} @ ${item.price}/ea</p>
                         {item.foundAt && (
-                          <p className="text-xs text-ninpo-lime ml-6 mt-1">Found at: {item.foundAt}</p>
+                          <p className="text-xs text-ninpo-lime ml-6 mt-1">
+                            Found at: {item.foundAt}
+                            {item.foundAtAddress && <span className="text-white/40 ml-1">({item.foundAtAddress})</span>}
+                          </p>
                         )}
                       </div>
                       <button
@@ -162,13 +168,19 @@ const ItemNotFoundTracker: React.FC<ItemNotFoundTrackerProps> = ({
                       <div className="mt-3 pt-3 border-t border-white/10 text-xs">
                         <p className="text-white/60 font-bold mb-2">Attempted at:</p>
                         <div className="flex flex-wrap gap-1">
-                          {item.attemptedStores.map((store) => (
-                            <span
-                              key={store}
-                              className="px-2 py-1 bg-green-500/10 text-green-300 rounded text-xs font-bold"
-                            >
-                              {store}
-                            </span>
+                          {item.attemptedStores.map((store, idx) => (
+                            <div key={`${store}-${idx}`} className="flex flex-col">
+                              <span
+                                className="px-2 py-1 bg-green-500/10 text-green-300 rounded text-xs font-bold"
+                              >
+                                {store}
+                              </span>
+                              {item.attemptedStoreAddresses?.[idx] && (
+                                <span className="text-[10px] text-white/30 ml-1 truncate max-w-[150px]">
+                                  {item.attemptedStoreAddresses[idx]}
+                                </span>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </div>

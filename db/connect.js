@@ -6,7 +6,9 @@ const RETRY_DELAY = 5000;
 const connectDB = async (retryCount = 0) => {
   try {
     if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI not defined');
+      console.error('CRITICAL: MONGO_URI is not defined in environment variables.');
+      console.error('Please add MONGO_URI to your App Settings (e.g., mongodb+srv://...)');
+      process.exit(1);
     }
 
     await mongoose.connect(process.env.MONGO_URI, {

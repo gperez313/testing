@@ -96,7 +96,7 @@ router.post('/order/:orderId/items-not-found', authRequired, async (req, res) =>
 router.patch('/order/:orderId/items-not-found/:sku', authRequired, async (req, res) => {
   try {
     const { orderId, sku } = req.params;
-    const { action, foundAt, attemptedStores } = req.body;
+    const { action, foundAt, foundAtId, foundAtAddress, attemptedStores, attemptedStoreIds, attemptedStoreAddresses } = req.body;
 
     if (!['found', 'remove', 'update'].includes(action)) {
       return res.status(400).json({ error: 'Invalid action. Use found, remove, or update' });
@@ -116,12 +116,20 @@ router.patch('/order/:orderId/items-not-found/:sku', authRequired, async (req, r
 
     if (action === 'found') {
       item.foundAt = foundAt || 'UNSPECIFIED_STORE';
+      item.foundAtId = foundAtId || null;
+      item.foundAtAddress = foundAtAddress || null;
       item.foundAtTime = new Date();
     } else if (action === 'remove') {
       item.removedAt = new Date();
     } else if (action === 'update') {
       if (attemptedStores) {
         item.attemptedStores = attemptedStores;
+      }
+      if (attemptedStoreIds) {
+        item.attemptedStoreIds = attemptedStoreIds;
+      }
+      if (attemptedStoreAddresses) {
+        item.attemptedStoreAddresses = attemptedStoreAddresses;
       }
     }
 

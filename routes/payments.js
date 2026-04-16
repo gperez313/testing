@@ -27,7 +27,7 @@ import { resolveDistanceMiles } from '../utils/distance.js';
 import { getDeliveryOptions } from '../utils/deliveryFees.js';
 import { isStoreInventoryPricingEnabled } from '../utils/featureFlags.js';
 
-const CREDIT_DELIVERY_ELIGIBLE_TIERS = new Set(['SILVER', 'GOLD', 'PLATINUM', 'GREEN']);
+const _CREDIT_DELIVERY_ELIGIBLE_TIERS = new Set(['SILVER', 'GOLD', 'PLATINUM', 'GREEN']);
 const CASH_PAYOUT_ELIGIBLE_TIERS = new Set(['GOLD', 'PLATINUM', 'GREEN']);
 const CASH_HANDLING_FEE_PER_CONTAINER = 0.02;
 const GLASS_HANDLING_SURCHARGE_PER_CONTAINER = 0.02;
@@ -38,7 +38,7 @@ const POINT_EARNING_RATES = {
   SILVER: 1.2,
   GOLD: 1.5
 };
-const DEFAULT_DISTANCE_FEES = {
+const _DEFAULT_DISTANCE_FEES = {
   distanceIncludedMiles: 3.0,
   distanceBand1MaxMiles: 10.0,
   distanceBand2MaxMiles: 20.0,
@@ -182,7 +182,7 @@ const verifyPricingLock = (lock) => {
     const nonneg = ['routeFee','distanceFee','largeOrderFee','heavyItemFee','distanceMiles'].every(k => payload[k] >= 0);
     if (!nonneg) return { ok: false, error: 'Negative values in pricing lock' };
     return { ok: true, payload };
-  } catch (e) {
+  } catch (_e) {
     return { ok: false, error: 'Verification failed' };
   }
 };
@@ -225,7 +225,7 @@ export const getTierEligibilityConfig = async () => {
   return { creditDeliveryEligibleTiers, cashPayoutEligibleTiers, allowPlatinumTier, allowGreenTier };
 };
 
-const TIER_ROUTE_DISCOUNTS = {
+const _TIER_ROUTE_DISCOUNTS = {
   BRONZE: 0.1,
   SILVER: 0.2,
   GOLD: 0.3
@@ -235,7 +235,7 @@ const TIER_ROUTE_DISCOUNTS = {
 
 // DEPRECATED: distance fee config moved to deliveryFees.js
 
-const roundDownToTenth = value => Math.floor(value * 10) / 10; // used for points calc only
+const _roundDownToTenth = value => Math.floor(value * 10) / 10; // used for points calc only
 
 const calculatePointUnits = ({ productPaidCents, tier }) => {
   const normalizedTier = normalizeTier(tier);
@@ -984,7 +984,7 @@ const createPaymentsRouter = ({ stripe }) => {
             })
           );
 
-          products.forEach(({ updated, item, pricing }) => {
+          products.forEach(({ _updated, item, pricing }) => {
             const unit = Math.round(Number(pricing.price) * 100);
             const lineTotal = unit * item.quantity;
             totalCents += lineTotal;
@@ -1027,10 +1027,8 @@ const createPaymentsRouter = ({ stripe }) => {
           totalCents += distanceFeeCents;
         }
 
-        const tier = normalizeTier(user?.membershipTier);
-        const eligibleCreditCents = eligibility.creditDeliveryEligibleTiers.has(tier)
-          ? totalCents
-          : productSubtotalCents;
+        // Bottle return can be used for products and delivery fees excluding extended delivery fee (distanceFee)
+        const eligibleCreditCents = Math.max(0, totalCents - distanceFeeCents);
         const availableCreditsCents = Math.max(
           0,
           Math.round(Number(user.creditBalance || 0) * 100)
@@ -1241,7 +1239,7 @@ const createPaymentsRouter = ({ stripe }) => {
 
   const applyWalletCredit = async (
     { order, walletCreditCents, payoutMethod },
-    { session, actorId }
+    { session, _actorId }
   ) => {
     let creditedUserId = null;
     let creditedAmount = 0;

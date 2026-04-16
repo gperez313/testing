@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * See GLOSSARY.md for authoritative definitions of all roles.
  */
@@ -434,6 +433,7 @@ export interface AppSettings {
   allowPlatinumTier: boolean;
   platinumFreeDelivery: boolean;
   allowReceiptApprovalCreateProduct: boolean;
+  autoUpdateProductPriceFromReceipt: boolean;
   priceLockDays: number;
 
   storageZones: string[];
@@ -497,6 +497,17 @@ export interface AuditLog {
   actorId: string;
   details: string;
   createdAt: string;
+}
+
+export interface CashPayout {
+  _id: string;
+  orderId: string;
+  userId: string;
+  driverId: string;
+  amount: number;
+  status: 'CREATED' | 'PAID' | 'CANCELLED';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ReturnVerification {

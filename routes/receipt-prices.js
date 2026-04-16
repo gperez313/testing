@@ -186,7 +186,7 @@ const computeReceiptOcrSuccessSummary = captures => {
   return summary;
 };
 
-const coerceNumber = value => {
+const _coerceNumber = value => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 };
@@ -269,7 +269,7 @@ const ensureIngestionAllowed = async storeId => {
 };
 
 // Persist a proposal draft for management review without mutating inventory directly
-async function upsertReceiptParseJobFromDraft({
+async function _upsertReceiptParseJobFromDraft({
   capture,
   draftItems,
   rawText,
@@ -384,7 +384,7 @@ const isCloudinaryUrl = url => {
   try {
     const urlObj = new URL(url);
     return ALLOWED_IMAGE_HOSTS.some(host => urlObj.hostname?.includes(host));
-  } catch (err) {
+  } catch (_err) {
     return false;
   }
 };
@@ -546,7 +546,7 @@ function isAllowedImageDataUrl(dataUrl) {
           console.log('Recognized as HEIC/HEIF');
           return true;
         }
-      } catch (err) {
+      } catch (_err) {
         // Ignore errors reading brand
       }
     }
@@ -576,7 +576,7 @@ const PRICE_DELTA_POLICY = {
   stalenessDays: 30
 };
 
-const evaluatePriceDelta = ({ lastPrice, newPrice, lastObservedAt, now = new Date() }) => {
+const _evaluatePriceDelta = ({ lastPrice, newPrice, lastObservedAt, now = new Date() }) => {
   if (!lastPrice) {
     return {
       isStale: false,
@@ -635,7 +635,7 @@ const tokenizeReceiptName = name => {
   return getReceiptLineNormalizedName(name).split(' ').filter(Boolean);
 };
 
-const detectPromo = name => {
+const _detectPromo = name => {
   const promoWords = ['sale', 'deal', 'promo', 'special', 'off', 'save', 'discount'];
   const tokens = tokenizeReceiptName(name);
   return tokens.some(token => promoWords.includes(token));
@@ -793,7 +793,7 @@ const mapReceiptItemsForResponse = (items) => {
   return (items || []).map((item, index) => normalizeDraftItemForResponse(item, index));
 };
 
-const defaultScanBatchLimit = 40;
+const _defaultScanBatchLimit = 40;
 
 const sanitizeSearch = (query) => {
   return String(query || '')
@@ -1730,7 +1730,7 @@ Rules: Extract product lines only (skip store, date, tax, total). Return empty [
           item.quantity > 0
         ).slice(0, 20); // Limit to 20 items per frame
       }
-    } catch (e) {
+    } catch (_e) {
       // Silent fail for parsing
     }
 

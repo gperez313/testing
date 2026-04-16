@@ -12,7 +12,11 @@ const getGeminiApiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_A
 
 const RECEIPT_PROMPT = `You are a receipt OCR specialist. Parse this receipt image THOROUGHLY.
 
-FIRST, extract the STORE NAME, STORE NUMBER, PHONE, and ADDRESS if visible at the top or bottom of receipt. Return them as:
+CRITICAL: You MUST distinguish between different locations of the same brand.
+Extract the STORE NAME, STORE NUMBER, PHONE, and ADDRESS if visible at the top or bottom of receipt. 
+Pay special attention to the specific street address and store/branch number, as these are used to differentiate between stores of the same brand (e.g., two different Walmart locations).
+
+Return them as:
 "storeName": "Store Name" (or null if not visible)
 "storeNumber": "1234" (or null if not visible)
 "phone": "555-123-4567" (or null if not visible)
@@ -26,19 +30,21 @@ THEN, extract ALL line items with prices. Return ONLY valid JSON format:
   "address": "123 MAIN ST, DEARBORN, MI 48126",
   "items": [
     {"receiptName": "COCA COLA 12PK", "upc": "012000001234", "quantity": 2, "totalPrice": 15.98},
+    {"receiptName": "BOTTLE DEPOSIT", "quantity": 12, "totalPrice": 1.20, "isDeposit": true},
     {"receiptName": "LAYS CHIPS ORIG", "upc": "028400123456", "quantity": 1, "totalPrice": 3.99}
   ]
 }
 
 RULES:
-1. Extract store name, store number (e.g., ST#, Store #, SC#), phone, and address if visible (street, city, state, zip)
-2. Extract ONLY product line items (skip store name, date, tax, subtotal, total, payment, instructions)
-3. Use exact product names from receipt
-4. Extract UPC if visible on the line (8-14 digits, usually near the item name)
-5. For multi-buy items, calculate quantity * unit price = totalPrice
-6. Skip discounts, coupons, tax lines
-7. Return empty array [] for items if none found
-8. Return ONLY valid JSON, no markdown, no explanation`;
+1. Extract store name, store number (e.g., ST#, Store #, SC#, Unit #), phone, and address if visible (street, city, state, zip).
+2. Extract product line items AND bottle deposits/returns.
+3. For bottle deposits, set "isDeposit": true.
+4. Use exact product names from receipt.
+5. Extract UPC if visible on the line (8-14 digits, usually near the item name).
+6. For multi-buy items, calculate quantity * unit price = totalPrice.
+7. Skip discounts, coupons, tax lines.
+8. Return empty array [] for items if none found.
+9. Return ONLY valid JSON, no markdown, no explanation.`;
 
 export async function geminiProvider({ images }) {
   const apiKey = getGeminiApiKey();
@@ -76,26 +82,27 @@ export async function geminiProvider({ images }) {
     }
 
     const response = await ai.models.generateContent({
-      model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-3-flash-preview',
+      model: process.env.GEMINI_DEFAULT_MODEL || 'gemini-1.5-flash',
       contents: [{ role: 'user', parts: [{ text: RECEIPT_PROMPT }, imageContent] }],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
           type: 'OBJECT',
           properties: {
-            storeName: { type: 'STRING' },
-            storeNumber: { type: 'STRING' },
-            phone: { type: 'STRING' },
-            address: { type: 'STRING' },
+            storeName: { type: 'STRING', description: 'The name of the store, e.g., Walmart, Kroger, etc.' },
+            storeNumber: { type: 'STRING', description: 'The specific store or branch number if visible' },
+            phone: { type: 'STRING', description: 'Store phone number' },
+            address: { type: 'STRING', description: 'Full store address' },
             items: {
               type: 'ARRAY',
               items: {
                 type: 'OBJECT',
                 properties: {
-                  receiptName: { type: 'STRING' },
-                  upc: { type: 'STRING' },
-                  quantity: { type: 'NUMBER' },
-                  totalPrice: { type: 'NUMBER' }
+                  receiptName: { type: 'STRING', description: 'The product name exactly as it appears on the receipt' },
+                  upc: { type: 'STRING', description: 'The UPC or barcode number if visible on the line' },
+                  quantity: { type: 'NUMBER', description: 'Quantity of the item' },
+                  totalPrice: { type: 'NUMBER', description: 'Total price for this line item' },
+                  isDeposit: { type: 'BOOLEAN', description: 'True if this line is a bottle deposit or container return' }
                 },
                 required: ['receiptName', 'totalPrice']
               }

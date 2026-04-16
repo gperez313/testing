@@ -73,7 +73,7 @@ const useCameraStream = ({
           dataHandlerRef: videoDataHandlerRef
         });
       }
-    } catch (err) {
+    } catch (_err) {
       startedRef.current = false;
       setError('Camera access denied. Please enable camera permissions.');
     }

@@ -1,5 +1,5 @@
 // Store selection and multi-waypoint routing for shopping runs
-import Store from '../models/Store.js';
+import _Store from '../models/Store.js';
 import StoreInventory from '../models/StoreInventory.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
@@ -278,7 +278,7 @@ export const calculateMultiStopRoute = async (storeStops, customerAddresses) => 
     }
 
     const route = data.routes[0];
-    const leg = route.legs[0];
+    const _leg = route.legs[0];
 
     // Sum all legs
     const totalDistance = route.legs.reduce((sum, l) => sum + l.distance.value, 0) / 1609.34; // meters to miles
@@ -287,7 +287,7 @@ export const calculateMultiStopRoute = async (storeStops, customerAddresses) => 
     return {
       distance: Math.round(totalDistance * 10) / 10,
       duration: Math.round(totalDuration),
-      route: route.legs.map((l, i) => ({
+      route: route.legs.map((l, _i) => ({
         from: l.start_address,
         to: l.end_address,
         distance: Math.round(l.distance.value / 1609.34 * 10) / 10,

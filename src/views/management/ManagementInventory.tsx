@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plus, Loader2, ScanLine, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Loader2, ScanLine, X, BrainCircuit, ArrowUpRight, ArrowDownRight, Check, AlertCircle } from 'lucide-react';
 import { Product, SizeUnit, UpcItem } from '../../types';
 import { ScannerMode } from '../../types';
 import { useNinpoCore } from '../../hooks/useNinpoCore';
@@ -66,6 +66,143 @@ interface ManagementInventoryProps {
   activeStoreName?: string;
 }
 
+interface PriceSuggestion {
+  productId: string;
+  name: string;
+  sku: string;
+  currentPrice: number;
+  suggestedRetail: number;
+  lastObservedCost: number;
+  lastObservedAt: string;
+  diff: number;
+}
+
+const PriceIntelligencePanel: React.FC = () => {
+  const [suggestions, setSuggestions] = useState<PriceSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { addToast } = useNinpoCore();
+
+  const fetchSuggestions = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await apiFetch<{ ok: boolean; suggestions: PriceSuggestion[] }>('/api/price-intelligence/suggestions');
+      if (data.ok) {
+        setSuggestions(data.suggestions);
+      } else {
+        setError('Failed to load suggestions');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load suggestions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSuggestions();
+  }, []);
+
+  const handleApplyPrice = async (productId: string, newPrice: number) => {
+    try {
+      const res = await apiFetch<{ ok: boolean }>(`/api/products/${productId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ price: newPrice })
+      });
+      if (res.ok) {
+        addToast('Price updated successfully', 'success');
+        setSuggestions(prev => prev.filter(s => s.productId !== productId));
+      }
+    } catch (err: any) {
+      addToast(err.message || 'Failed to update price', 'error');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <Loader2 className="w-8 h-8 animate-spin text-ninpo-lime" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Analyzing price data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-ninpo-red/10 border border-ninpo-red/20 rounded-3xl p-8 text-center space-y-4">
+        <AlertCircle className="w-8 h-8 mx-auto text-ninpo-red" />
+        <p className="text-sm text-ninpo-red font-bold uppercase tracking-widest">{error}</p>
+        <button 
+          onClick={fetchSuggestions}
+          className="px-6 py-2 bg-ninpo-red/20 text-ninpo-red rounded-xl text-[10px] font-black uppercase tracking-widest"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-12 text-center space-y-4">
+        <Check className="w-12 h-12 mx-auto text-ninpo-lime opacity-50" />
+        <h3 className="text-white font-black uppercase tracking-widest">Pricing is optimized</h3>
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
+          All product prices are currently aligned with the latest observed costs from receipt parsing.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4">
+        {suggestions.map(s => (
+          <div key={s.productId} className="bg-ninpo-card p-6 rounded-[2.5rem] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-white/20 transition-all group">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <BrainCircuit className="w-4 h-4 text-ninpo-lime" />
+                <p className="text-white font-black truncate">{s.name}</p>
+              </div>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                SKU: {s.sku} • Last Cost: ${s.lastObservedCost.toFixed(2)} ({new Date(s.lastObservedAt).toLocaleDateString()})
+              </p>
+            </div>
+
+            <div className="flex items-center gap-8">
+              <div className="text-right">
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1">Current</p>
+                <p className="text-white font-black">${s.currentPrice.toFixed(2)}</p>
+              </div>
+
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5">
+                {s.suggestedRetail > s.currentPrice ? (
+                  <ArrowUpRight className="w-4 h-4 text-ninpo-lime" />
+                ) : (
+                  <ArrowDownRight className="w-4 h-4 text-ninpo-red" />
+                )}
+              </div>
+
+              <div className="text-right">
+                <p className="text-[10px] text-ninpo-lime font-black uppercase tracking-widest mb-1">Suggested</p>
+                <p className="text-ninpo-lime font-black text-lg">${s.suggestedRetail.toFixed(2)}</p>
+              </div>
+
+              <button
+                onClick={() => handleApplyPrice(s.productId, s.suggestedRetail)}
+                className="px-6 py-3 rounded-2xl bg-ninpo-lime text-ninpo-black text-[10px] font-black uppercase tracking-widest shadow-neon hover:scale-105 transition-all"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const InventoryCreateForm: React.FC<InventoryCreateFormProps> = ({
   scannedUpcForCreation,
   setScannedUpcForCreation,
@@ -84,7 +221,7 @@ export const InventoryCreateForm: React.FC<InventoryCreateFormProps> = ({
   handleCancelCreate,
   apiCreateProduct,
   isCreating,
-  isDirty,
+  _isDirty,
   setIsDirty,
   pendingUpc,
   setPendingUpc,
@@ -670,23 +807,50 @@ const ManagementInventory: React.FC<ManagementInventoryProps> = ({
   formatSize,
   activeStoreName
 }) => {
+  const [activeTab, setActiveTab] = useState<'list' | 'intelligence'>('list');
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-black uppercase text-white tracking-widest">
-          Inventory
-        </h2>
-        <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-2">
-          Manage products, stock, and create new items.
-        </p>
-        {activeStoreName && (
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-            Active store: {activeStoreName}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black uppercase text-white tracking-widest">
+            Inventory
+          </h2>
+          <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest mt-2">
+            Manage products, stock, and create new items.
           </p>
-        )}
+          {activeStoreName && (
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              Active store: {activeStoreName}
+            </p>
+          )}
+        </div>
+
+        <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10">
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              activeTab === 'list' ? 'bg-white/10 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            Product List
+          </button>
+          <button
+            onClick={() => setActiveTab('intelligence')}
+            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+              activeTab === 'intelligence' ? 'bg-ninpo-lime text-ninpo-black shadow-neon' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            <BrainCircuit className="w-3 h-3" />
+            Price Intelligence
+          </button>
+        </div>
       </div>
 
-      <div className="bg-ninpo-card p-8 rounded-[3rem] border border-white/5 space-y-6">
+      {activeTab === 'intelligence' ? (
+        <PriceIntelligencePanel />
+      ) : (
+        <div className="bg-ninpo-card p-8 rounded-[3rem] border border-white/5 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Scanner controls
@@ -804,8 +968,9 @@ const ManagementInventory: React.FC<ManagementInventoryProps> = ({
           ))}
         </div>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 };
 
 export default ManagementInventory;

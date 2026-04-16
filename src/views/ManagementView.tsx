@@ -40,8 +40,10 @@ import {
   Building2,
   Barcode,
   ClipboardList,
-  RotateCcw
+  RotateCcw,
+  DollarSign
 } from 'lucide-react';
+import AdminCashPayouts from '../components/AdminCashPayouts';
 import ScannerModal from '../components/ScannerModal';
 import UnmappedUpcModal from '../components/UnmappedUpcModal';
 import { UnmappedUpcData } from '../types';
@@ -781,7 +783,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({
     setEditingProduct(null);
   };
 
-  const formatStoreOptionLabel = (store: StoreRecord) => {
+  const _formatStoreOptionLabel = (store: StoreRecord) => {
     const meta = [];
     if (store.storeType) {
       meta.push(store.storeType.charAt(0).toUpperCase() + store.storeType.slice(1));
@@ -1148,7 +1150,7 @@ const ManagementView: React.FC<ManagementViewProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const managementSections = {
+  const managementSections: Record<string, any> = {
     dashboard: {
       id: 'dashboard',
       label: 'Dashboard',
@@ -1270,37 +1272,6 @@ const ManagementView: React.FC<ManagementViewProps> = ({
         />
       )
     },
-    'auth-audit': {
-      id: 'auth-audit',
-      label: 'Auth & Audit',
-      icon: ShieldCheck,
-      render: () => (
-        <ManagementAuthAudit
-          approvalFilter={approvalFilter}
-          setApprovalFilter={setApprovalFilter}
-          filteredApprovals={filteredApprovals}
-          handleApprove={handleApprove}
-          handleReject={handleReject}
-          setSelectedApproval={setSelectedApproval}
-          setPreviewPhoto={setPreviewPhoto}
-          fmtTime={fmtTime}
-          filteredAuditLogs={filteredAuditLogs}
-          auditTypeFilter={auditTypeFilter}
-          setAuditTypeFilter={setAuditTypeFilter}
-          auditActorFilter={auditActorFilter}
-          setAuditActorFilter={setAuditActorFilter}
-          auditRangeFilter={auditRangeFilter}
-          setAuditRangeFilter={setAuditRangeFilter}
-          auditTypeOptions={auditTypeOptions}
-          isAuditLogsLoading={isAuditLogsLoading}
-          auditLogsError={auditLogsError}
-          handleDownloadAuditCsv={handleDownloadAuditCsv}
-          runAuditSummary={runAuditSummary}
-          auditSummary={auditSummary}
-          isAuditSummaryLoading={isAuditSummaryLoading}
-        />
-      )
-    },
     orders: {
       id: 'orders',
       label: 'Orders',
@@ -1409,8 +1380,49 @@ const ManagementView: React.FC<ManagementViewProps> = ({
           isNewSignupWithBonus={isNewSignupWithBonus}
         />
       )
-    },
-    settings: {
+    }
+  };
+
+  // Owner-only modules
+  if (user.role === 'OWNER') {
+    managementSections['cash-payouts'] = {
+      id: 'cash-payouts',
+      label: 'Cash Payouts',
+      icon: DollarSign,
+      render: () => <AdminCashPayouts />
+    };
+    managementSections['auth-audit'] = {
+      id: 'auth-audit',
+      label: 'Auth & Audit',
+      icon: ShieldCheck,
+      render: () => (
+        <ManagementAuthAudit
+          approvalFilter={approvalFilter}
+          setApprovalFilter={setApprovalFilter}
+          filteredApprovals={filteredApprovals}
+          handleApprove={handleApprove}
+          handleReject={handleReject}
+          setSelectedApproval={setSelectedApproval}
+          setPreviewPhoto={setPreviewPhoto}
+          fmtTime={fmtTime}
+          filteredAuditLogs={filteredAuditLogs}
+          auditTypeFilter={auditTypeFilter}
+          setAuditTypeFilter={setAuditTypeFilter}
+          auditActorFilter={auditActorFilter}
+          setAuditActorFilter={setAuditActorFilter}
+          auditRangeFilter={auditRangeFilter}
+          setAuditRangeFilter={setAuditRangeFilter}
+          auditTypeOptions={auditTypeOptions}
+          isAuditLogsLoading={isAuditLogsLoading}
+          auditLogsError={auditLogsError}
+          handleDownloadAuditCsv={handleDownloadAuditCsv}
+          runAuditSummary={runAuditSummary}
+          auditSummary={auditSummary}
+          isAuditSummaryLoading={isAuditSummaryLoading}
+        />
+      )
+    };
+    managementSections['settings'] = {
       id: 'settings',
       label: 'Settings',
       icon: Sliders,
@@ -1430,8 +1442,8 @@ const ManagementView: React.FC<ManagementViewProps> = ({
           saveSettings={saveSettings}
         />
       )
-    }
-  } as const;
+    };
+  }
 
   const sectionList = Object.values(managementSections);
   const activeSection = managementSections[activeModule as keyof typeof managementSections];

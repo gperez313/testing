@@ -175,7 +175,8 @@ export const buildPriceObservationPayload = ({
       receiptCaptureId,
       lineIndex: item?.lineIndex,
       matchMethod,
-      workflowType
+      workflowType,
+      isDeposit: Boolean(item?.isDeposit)
     }
   };
 };

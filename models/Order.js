@@ -138,8 +138,14 @@ const orderSchema = new mongoose.Schema(
           quantity: Number,
           price: Number,
           originalStore: String,
+          originalStoreId: String,
+          originalStoreAddress: String,
           attemptedStores: [String],
+          attemptedStoreIds: [String],
+          attemptedStoreAddresses: [String],
           foundAt: { type: String, default: null },
+          foundAtId: { type: String, default: null },
+          foundAtAddress: { type: String, default: null },
           foundAtTime: { type: Date, default: null },
           removedAt: { type: Date, default: null }
         }

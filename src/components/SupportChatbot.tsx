@@ -67,7 +67,7 @@ export const SupportChatbot: React.FC<SupportChatbotProps> = ({
       };
 
       setMessages(prev => [...prev, agentMessage]);
-    } catch (error) {
+    } catch (_error) {
       const errorMessage: ChatMessage = {
         role: 'agent',
         message: 'Sorry, I encountered an error. Please try again.',

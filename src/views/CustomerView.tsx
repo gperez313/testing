@@ -17,14 +17,13 @@ interface CustomerViewProps {
 }
 
 import React, { useState, useEffect } from 'react';
-import { Product, Order, OrderStatus, User, UserTier, UserStatsSummary } from '../types';
+import { Product, Order, OrderStatus, User, UserTier, UserStatsSummary, ReturnUpcCount } from '../types';
 import { Plus, Settings, Leaf, Star, Coins, Zap, Info, CheckCircle2, XCircle, Recycle } from 'lucide-react';
-import { CATEGORIES } from '../constants';
+import { CATEGORIES, BACKEND_URL } from '../constants';
 import CustomerReturnScanner from '../components/CustomerReturnScanner';
 import { analytics } from '../services/analyticsService';
 import AssistantSearchChat from '../components/AssistantSearchChat';
-
-
+import ProductMarketIntelligence from '../components/ProductMarketIntelligence';
 
 import OrderTrackingMap from '../components/OrderTrackingMap';
 
@@ -41,6 +40,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
   const [activeCategory, setActiveCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [aiFilteredIds, setAiFilteredIds] = useState<string[]>([]);
+  const [aiInterpretation, setAiInterpretation] = useState('');
   const [showDashboard, setShowDashboard] = useState(false);
   const [showReturnScanner, setShowReturnScanner] = useState(false);
   const [totalReturnContainers, setTotalReturnContainers] = useState(0);
@@ -49,6 +49,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
   const [payoutMethod, setPayoutMethod] = useState<'CREDIT' | 'CASH'>('CREDIT');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
   const [showPayoutSelection, setShowPayoutSelection] = useState(false);
+  const [selectedMarketProductId, setSelectedMarketProductId] = useState<string | null>(null);
 
   const activeOrders = orders.filter(o => 
     !['DELIVERED', 'REFUNDED', 'CLOSED'].includes(o.status)
@@ -56,6 +57,7 @@ const CustomerView: React.FC<CustomerViewProps> = ({
 
   // Lifetime bottle returns state
   const [lifetimeBottleReturns, setLifetimeBottleReturns] = useState<number | null>(null);
+  const [returnHistory, setReturnHistory] = useState<any[]>([]);
   const [bottleReturnsLoading, setBottleReturnsLoading] = useState(false);
   const [bottleReturnsError, setBottleReturnsError] = useState<string | null>(null);
 
@@ -65,13 +67,25 @@ const CustomerView: React.FC<CustomerViewProps> = ({
       setBottleReturnsLoading(true);
       setBottleReturnsError(null);
       try {
-        const res = await fetch(`/server/users/${currentUser.id}/bottle-returns`, {
-          credentials: 'include',
-        });
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        setLifetimeBottleReturns(data.lifetimeBottleReturns ?? 0);
-      } catch (err: any) {
+        const [statsRes, historyRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/users/${currentUser.id}/bottle-returns`, {
+            credentials: 'include',
+          }),
+          fetch(`${BACKEND_URL}/api/bottle-returns`, {
+            credentials: 'include',
+          })
+        ]);
+
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setLifetimeBottleReturns(statsData.lifetimeBottleReturns ?? 0);
+        }
+
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          setReturnHistory(Array.isArray(historyData) ? historyData : []);
+        }
+      } catch (_err: any) {
         setBottleReturnsError('Could not load bottle returns');
         setLifetimeBottleReturns(null);
       } finally {
@@ -96,7 +110,6 @@ const CustomerView: React.FC<CustomerViewProps> = ({
   // Checklist progress logic (backend-aligned)
   const userTier = (currentUser?.membershipTier ?? UserTier.COMMON).toString().toUpperCase();
   const orderCount = userStats?.orderCount ?? 0;
-  const totalSpend = userStats?.totalSpend ?? 0;
   const phoneVerified = !!currentUser?.phoneVerified;
   const photoIdVerified = !!currentUser?.photoIdVerified;
 
@@ -105,29 +118,26 @@ const CustomerView: React.FC<CustomerViewProps> = ({
     {
       label: 'Bronze',
       requirements: [
-        { label: '25 orders', met: orderCount >= 25, value: `${orderCount}/25` },
-        { label: '$250 spent', met: totalSpend >= 250, value: `$${totalSpend.toFixed(2)}/$250.00` },
-        { label: 'Email verified', met: true, value: '✓' }, // always true (implicit)
+        { label: '5 orders', met: orderCount >= 5, value: `${orderCount}/5` },
+        { label: 'Email verified', met: true, value: '✓' },
       ],
-      achieved: userTier === 'BRONZE' || userTier === 'SILVER' || userTier === 'GOLD' || userTier === 'PLATINUM',
+      achieved: ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'GREEN'].includes(userTier),
     },
     {
       label: 'Silver',
       requirements: [
-        { label: '50 orders', met: orderCount >= 50, value: `${orderCount}/50` },
-        { label: '$600 spent', met: totalSpend >= 600, value: `$${totalSpend.toFixed(2)}/$600.00` },
+        { label: '10 orders', met: orderCount >= 10, value: `${orderCount}/10` },
         { label: 'Phone verified', met: phoneVerified, value: phoneVerified ? '✓' : '✗' },
       ],
-      achieved: userTier === 'SILVER' || userTier === 'GOLD' || userTier === 'PLATINUM',
+      achieved: ['SILVER', 'GOLD', 'PLATINUM', 'GREEN'].includes(userTier),
     },
     {
       label: 'Gold',
       requirements: [
-        { label: '100 orders', met: orderCount >= 100, value: `${orderCount}/100` },
-        { label: '$1500 spent', met: totalSpend >= 1500, value: `$${totalSpend.toFixed(2)}/$1500.00` },
+        { label: '15 orders', met: orderCount >= 15, value: `${orderCount}/15` },
         { label: 'Photo ID verified', met: photoIdVerified, value: photoIdVerified ? '✓' : '✗' },
       ],
-      achieved: userTier === 'GOLD' || userTier === 'PLATINUM',
+      achieved: ['GOLD', 'PLATINUM', 'GREEN'].includes(userTier),
     },
     {
       label: 'Platinum',
@@ -135,6 +145,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
         { label: 'Owner-assigned', met: userTier === 'PLATINUM', value: userTier === 'PLATINUM' ? '✓' : '✗' },
       ],
       achieved: userTier === 'PLATINUM',
+    },
+    {
+      label: 'Green',
+      requirements: [
+        { label: 'Low Income / Owner-assigned', met: userTier === 'GREEN', value: userTier === 'GREEN' ? '✓' : '✗' },
+      ],
+      achieved: userTier === 'GREEN',
     },
   ];
 
@@ -168,6 +185,15 @@ const CustomerView: React.FC<CustomerViewProps> = ({
           />
         </div>
         <div className="flex gap-4">
+          <button
+            onClick={() => {
+              setShowReturnScanner(true);
+              setShowDashboard(false);
+            }}
+            className="px-8 py-5 bg-ninpo-lime text-ninpo-black rounded-[1.5rem] font-black text-[12px] uppercase tracking-widest flex items-center gap-3 shadow-neon hover:scale-105 transition-all active:scale-95"
+          >
+            <Recycle className="w-5 h-5" /> Schedule Bottle Pickup
+          </button>
           {currentUser && (
             <button
               onClick={() => {
@@ -322,6 +348,23 @@ const CustomerView: React.FC<CustomerViewProps> = ({
       ) : !showDashboard ? (
         <>
           {/* Main product/market view */}
+          {aiInterpretation && (
+            <div className="bg-ninpo-lime/10 border border-ninpo-lime/20 rounded-[2rem] p-6 mb-8 flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-700">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-ninpo-lime mb-1">AI Search Interpretation</p>
+                <p className="text-sm text-white font-black italic">"{aiInterpretation}"</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setAiFilteredIds([]);
+                  setAiInterpretation(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-all"
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
           <div className="flex gap-2 sm:gap-4 overflow-x-auto whitespace-nowrap no-scrollbar pb-4 -mx-4 px-4 sm:mx-0 sm:px-1">
             {CATEGORIES.map(cat => {
@@ -347,7 +390,13 @@ const CustomerView: React.FC<CustomerViewProps> = ({
                 key={p.id}
                 className="bg-ninpo-card rounded-[3.5rem] p-6 flex flex-col border border-white/5 shadow-2xl relative group hover:border-ninpo-lime/20 transition-all duration-500"
               >
-                <div className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-ninpo-black relative">
+                <div 
+                  onClick={() => {
+                    const productId = (p as any).frontendId || p.id || (p as any)._id;
+                    setSelectedMarketProductId(productId);
+                  }}
+                  className="aspect-square rounded-[2.5rem] overflow-hidden mb-6 bg-ninpo-black relative cursor-help"
+                >
                   <img
                     src={p.image}
                     className={`w-full h-full object-cover grayscale transition-all duration-700 ${
@@ -465,15 +514,43 @@ const CustomerView: React.FC<CustomerViewProps> = ({
                     Bottle Returns (Lifetime)
                   </h3>
                 </div>
-                <div className="bg-ninpo-black/80 p-6 rounded-2xl border border-white/5 shadow-xl flex justify-center items-center w-full min-h-[56px]">
+                <div className="bg-ninpo-black/80 p-6 rounded-2xl border border-white/5 shadow-xl flex flex-col w-full min-h-[56px] max-h-56 overflow-y-auto">
                   {bottleReturnsLoading ? (
-                    <span className="text-slate-500 text-lg">Loading...</span>
+                    <span className="text-slate-500 text-lg text-center">Loading...</span>
                   ) : bottleReturnsError ? (
-                    <span className="text-red-500 text-sm">{bottleReturnsError}</span>
+                    <span className="text-red-500 text-sm text-center">{bottleReturnsError}</span>
                   ) : (
-                    <span className="text-white font-black text-3xl tracking-tighter">
-                      {lifetimeBottleReturns ?? 0}
-                    </span>
+                    <>
+                      <div className="flex justify-center items-center mb-4">
+                        <span className="text-white font-black text-3xl tracking-tighter">
+                          {lifetimeBottleReturns ?? 0}
+                        </span>
+                      </div>
+                      {returnHistory.length > 0 && (
+                        <ul className="divide-y divide-ninpo-lime/10">
+                          {returnHistory.slice(0, 5).map(ret => (
+                            <li key={ret._id} className="py-2 flex justify-between items-center">
+                              <div className="flex flex-col">
+                                <span className="text-white text-[10px] font-bold uppercase">
+                                  {ret.claimedCount} Containers
+                                </span>
+                                <span className="text-slate-500 text-[8px] uppercase">
+                                  {new Date(ret.createdAt).toLocaleDateString()} &bull; {ret.type}
+                                </span>
+                              </div>
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                ret.status === 'REDEEMED' ? 'bg-ninpo-lime/20 text-ninpo-lime' :
+                                ret.status === 'VERIFIED' ? 'bg-blue-500/20 text-blue-400' :
+                                ret.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-slate-500/20 text-slate-400'
+                              }`}>
+                                {ret.status}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </div>
                 <p className="text-slate-500 text-xs mt-2 text-center">
@@ -514,6 +591,38 @@ const CustomerView: React.FC<CustomerViewProps> = ({
                   Track your progress toward higher membership tiers and rewards.
                 </p>
               </div>
+
+              {/* Eco-Impact Section */}
+              <div className="bg-green-500/5 p-8 rounded-[3rem] border border-green-500/20 space-y-6 flex flex-col items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <Leaf className="w-5 h-5 text-green-400" />
+                  <h3 className="text-white font-black uppercase text-[10px] tracking-[0.2em]">
+                    Your Eco-Impact
+                  </h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4 w-full">
+                   <div className="bg-ninpo-black/80 p-4 rounded-2xl border border-white/5 shadow-xl flex flex-col items-center text-center">
+                      <p className="text-2xl font-black text-green-400 tracking-tighter">
+                        {((lifetimeBottleReturns ?? 0) * 0.25).toFixed(1)}kg
+                      </p>
+                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">
+                        CO2 Saved
+                      </p>
+                   </div>
+                   <div className="bg-ninpo-black/80 p-4 rounded-2xl border border-white/5 shadow-xl flex flex-col items-center text-center">
+                      <p className="text-2xl font-black text-green-400 tracking-tighter">
+                        {((lifetimeBottleReturns ?? 0) * 0.5).toFixed(1)}kg
+                      </p>
+                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mt-1">
+                        Glass Recycled
+                      </p>
+                   </div>
+                </div>
+                <p className="text-slate-500 text-xs mt-2 text-center">
+                  Calculated based on your verified {lifetimeBottleReturns ?? 0} bottle returns. Keep Michigan green!
+                </p>
+              </div>
+
               {/* Credit Wallet & Loyalty Points Section */}
               <div className="bg-ninpo-card p-10 rounded-[3rem] border border-white/5 flex flex-col justify-center items-center text-center space-y-8 shadow-2xl relative overflow-hidden group">
                 <div className="w-20 h-20 bg-ninpo-lime/10 rounded-[2rem] flex items-center justify-center border border-ninpo-lime/20 shadow-neon mb-2">
@@ -534,9 +643,48 @@ const CustomerView: React.FC<CustomerViewProps> = ({
                   </p>
                 </div>
                 <div className="mt-4">
-                  <h3 className="text-slate-600 font-black uppercase text-[10px] tracking-[0.4em] mb-2">
-                    Loyalty Points
-                  </h3>
+                  <div className="flex items-center justify-center gap-4 mb-2">
+                    <h3 className="text-slate-600 font-black uppercase text-[10px] tracking-[0.4em]">
+                      Loyalty Points
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const userTier = (currentUser?.membershipTier ?? UserTier.COMMON).toString().toUpperCase();
+                        const minRedeemByTier: Record<string, number> = {
+                          BRONZE: 500,
+                          SILVER: 250,
+                          GOLD: 0,
+                          PLATINUM: 0,
+                          GREEN: 0
+                        };
+                        const minPoints = minRedeemByTier[userTier];
+
+                        if (minPoints === undefined) {
+                          alert('Your current tier is not eligible for points redemption. Complete more orders to reach Bronze!');
+                          return;
+                        }
+
+                        if (safeLoyaltyPoints < minPoints) {
+                          alert(`Minimum redemption for ${userTier} tier is ${minPoints} points.`);
+                          return;
+                        }
+
+                        const amount = prompt(`Enter points to redeem (Min: ${minPoints}, Max: ${safeLoyaltyPoints}):`, safeLoyaltyPoints.toString());
+                        if (amount) {
+                          const points = parseInt(amount);
+                          if (!isNaN(points) && points >= minPoints && points <= safeLoyaltyPoints) {
+                            onRedeemPoints(points);
+                          } else {
+                            alert('Invalid points amount.');
+                          }
+                        }
+                      }}
+                      disabled={!['BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'GREEN'].includes(userTier)}
+                      className="text-[10px] font-black uppercase tracking-widest text-ninpo-lime hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Redeem
+                    </button>
+                  </div>
                   <p className="text-3xl font-black text-ninpo-lime tracking-tighter leading-none">
                     {safeLoyaltyPoints}
                   </p>
@@ -546,6 +694,16 @@ const CustomerView: React.FC<CustomerViewProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {/* Market Intelligence Modal */}
+      {selectedMarketProductId && (
+        <div className="fixed inset-0 z-[10002] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm overflow-y-auto">
+          <ProductMarketIntelligence 
+            productId={selectedMarketProductId}
+            onClose={() => setSelectedMarketProductId(null)}
+          />
+        </div>
       )}
     </div>
   );

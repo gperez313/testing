@@ -277,19 +277,29 @@ const LegalFooter: React.FC = () => {
           content={
             <>
               <p>
-                Returnables must be empty, clean, intact, and clearly marked as eligible. Drivers
-                verify eligibility at drop-off using UPC scan + visual condition check. Non-eligible
-                or damaged containers can be declined at the door.
+                Ninpo Snacks operates in compliance with the Michigan Beverage Container Deposit Law (MCL 445.571).
+                Returnables must be empty, clean, intact, and clearly marked as eligible for the Michigan 10¢ refund.
               </p>
               <p>
-                Verified containers earn $0.10 each where applicable. Credit settlement preserves
-                the full deposit value. Cash settlement (Gold+ only) can apply cash handling fees
-                and material surcharges depending on program settings.
+                <strong>Eligibility Criteria:</strong>
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Carbonated beverages (Soda, Beer, Sparkling Water, Carbonated Mineral Water)</li>
+                  <li>Mixed wine or spirit drinks</li>
+                  <li>Airtight containers (cans or bottles)</li>
+                  <li>Containers between 1oz and 1 gallon</li>
+                </ul>
+              </p>
+              <p className="text-ninpo-red/80">
+                <strong>Non-Eligible Items:</strong> Uncarbonated water, fruit juice, milk, and unmixed wine or spirits are NOT eligible for the 10¢ refund under Michigan law.
               </p>
               <p>
-                Return value posts after verification. A receipt may show counts, eligibility,
-                adjustments, and totals. AI tools can assist classification but do not make final
-                decisions.
+                Drivers verify eligibility at drop-off using UPC scan + visual condition check. Non-eligible
+                or damaged containers will be declined.
+              </p>
+              <p>
+                Verified containers earn $0.10 each. Credit settlement preserves
+                the full deposit value. Cash settlement (Gold+ only) may apply a small handling fee
+                to cover material processing and logistics.
               </p>
             </>
           }

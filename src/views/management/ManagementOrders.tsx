@@ -12,8 +12,7 @@ import {
   RefreshCw,
   Signature,
   UserCheck,
-  XCircle,
-  ScanLine
+  XCircle
 } from 'lucide-react';
 import { apiFetch } from '../../utils/apiFetch';
 
@@ -156,7 +155,7 @@ interface ManagementOrdersProps {
 
 const ManagementOrders: React.FC<ManagementOrdersProps> = ({
   orders,
-  users,
+  _users,
   isRefreshingOrders,
   ordersError,
   apiRefreshOrders,
@@ -164,7 +163,7 @@ const ManagementOrders: React.FC<ManagementOrdersProps> = ({
   canCancel,
   fmtTime,
   countTotalUpcs,
-  openReturnProcessingScanner
+  _openReturnProcessingScanner
 }) => {
   const [openDetail, setOpenDetail] = useState<Record<string, boolean>>({});
 

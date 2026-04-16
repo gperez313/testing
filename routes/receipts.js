@@ -913,7 +913,8 @@ export const approveReceiptJobHandler = async (req, res) => {
               unmappedProductId: inventoryUnmappedProductId,
               price: unitPrice,
               inventoryId: inventory?._id,
-              lineIndex: item.lineIndex
+              lineIndex: item.lineIndex,
+              isDeposit: item.isDeposit
             })
           );
         }

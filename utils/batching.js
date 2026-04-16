@@ -1,6 +1,6 @@
 // Batching logic for multi-order delivery optimization
 import Batch from '../models/Batch.js';
-import Order from '../models/Order.js';
+import _Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 
@@ -9,7 +9,7 @@ const MAX_BATCH_LOAD = 45; // Total handling points
 const MAX_HEAVY_POINTS = 20; // Prevent all-water batches
 const MAX_CUSTOMERS_PER_BATCH = 4;
 const BATCH_WINDOW_MINUTES = 30; // Orders must be within 30 min of each other
-const DELIVERY_ZONE_RADIUS_MILES = 5; // Addresses must be within 5 miles
+const _DELIVERY_ZONE_RADIUS_MILES = 5; // Addresses must be within 5 miles
 
 /**
  * Calculate order load (handling points)

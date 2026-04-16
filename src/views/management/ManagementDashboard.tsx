@@ -1,3 +1,42 @@
+const PriceIntelligenceSummary: React.FC = () => {
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<{ ok: boolean; suggestions: any[] }>('/api/price-intelligence/suggestions')
+      .then(data => {
+        if (data.ok) setSuggestions(data.suggestions);
+      })
+      .catch(console.error)
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) return <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-ninpo-lime" /></div>;
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="bg-ninpo-lime/10 border border-ninpo-lime/20 rounded-xl p-4 mt-6 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-ninpo-lime/20 rounded-lg">
+          <BrainCircuit className="w-5 h-5 text-ninpo-lime" />
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-ninpo-lime">Price Intelligence</p>
+          <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">
+            {suggestions.length} products have suggested price adjustments based on recent receipts.
+          </p>
+        </div>
+      </div>
+      <a 
+        href="#/management/inventory" 
+        className="px-4 py-2 bg-ninpo-lime text-ninpo-black text-[10px] font-black uppercase tracking-widest rounded-lg shadow-neon whitespace-nowrap"
+      >
+        Review Suggestions
+      </a>
+    </div>
+  );
+};
+
 // Simple stat card component
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: React.ReactNode; subtitle?: string }> = ({ icon, label, value, subtitle }) => (
   <div className="bg-white/5 rounded-xl p-4 border border-white/10 flex flex-col items-start">
@@ -607,6 +646,9 @@ const ManagementDashboard: React.FC<ManagementDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      <PriceIntelligenceSummary />
+
       {/* Parse Job History Panel */}
       <ParseJobHistoryPanel />
       {/* AI Operations Summary Section */}

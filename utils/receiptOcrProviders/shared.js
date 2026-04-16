@@ -1,6 +1,6 @@
 import { recordAuditLog } from '../audit.js';
 
-const RECEIPT_SKIP_ROW_PATTERN = /(subtotal|sub total|tax|payment|tender|change|balance|total\s+due|grand\s+total|cash|credit|debit|visa|mastercard|amex|discover|coupon|discount|savings|loyalty|fee|deposit|bottle\s+return|tip|auth|approval|invoice|order\s*#|thank\s+you)/i;
+const RECEIPT_SKIP_ROW_PATTERN = /(subtotal|sub total|tax|payment|tender|change|balance|total\s+due|grand\s+total|cash|credit|debit|visa|mastercard|amex|discover|coupon|discount|savings|loyalty|fee|tip|auth|approval|invoice|order\s*#|thank\s+you)/i;
 
 const RECEIPT_IMAGE_FETCH_ATTEMPTS = 3;
 const RECEIPT_IMAGE_FETCH_RETRY_DELAY_MS = 300;
@@ -257,7 +257,7 @@ export const recoverItemsFromRawText = rawText => {
   const recovered = [];
   let pendingName = '';
 
-  const itemLineRegex = /^(.+?)\s+(?:(\d+(?:[.,]\d+)?)\s*[xX]\s*)?([\$€£]?\s*[\d\s]+(?:[.,]\s*\d{1,2})?(?:\s*[A-Z]{3})?)\s*$/;
+  const itemLineRegex = /^(.+?)\s+(?:(\d+(?:[.,]\d+)?)\s*[xX]\s*)?([$€£]?\s*[\d\s]+(?:[.,]\s*\d{1,2})?(?:\s*[A-Z]{3})?)\s*$/;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();

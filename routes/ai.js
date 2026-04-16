@@ -428,7 +428,7 @@ const naturalSearchInternal = async ({ query, products = [] }) => {
 };
 
 // Helper function for chat (extracted for reuse)
-const chatInternal = async ({ message, conversationHistory = [], userContext = {} }) => {
+const chatInternal = async ({ message, _conversationHistory = [], userContext = {} }) => {
   const apiKey = getGeminiApiKey();
   const ai = new GoogleGenAI({ apiKey });
 
@@ -572,12 +572,20 @@ router.post('/product-scan', async (req, res) => {
 
   const prompt = `For a product with UPC "${resolvedUpc}", extract metadata from this label image.
 Return JSON only: {"name":"", "brand":"", "productType":"", "category":"", "sizeOz":0, "sizeUnit":"oz|fl oz|g|kg|ml|l|", "quantity":0, "nutritionNote":"", "storageZone":"", "storageBin":"", "image":"", "containerType":"plastic|glass|aluminum|", "isEligible":true|false, "message":""}.
-Use empty string or 0 if unknown. "sizeUnit" should be one of oz, fl oz, g, kg, ml, l, or empty. "containerType" should be one of plastic, glass, aluminum, or empty. "isEligible" means Michigan 10¢ deposit eligible.
+Use empty string or 0 if unknown. "sizeUnit" should be one of oz, fl oz, g, kg, ml, l, or empty. "containerType" should be one of plastic, glass, aluminum, or empty. 
+
+"isEligible" means Michigan 10¢ deposit eligible. 
+CRITERIA FOR MICHIGAN ELIGIBILITY:
+- MUST be a carbonated beverage (Soda, Beer, Sparkling Water, Carbonated Mineral Water, Mixed Wine/Spirit drinks).
+- MUST NOT be uncarbonated water, fruit juice, milk, or unmixed wine/spirits.
+- Container must be airtight (can or bottle).
+- Generally applies to containers between 1oz and 1 gallon.
+
 OCR hints from Cloud Vision:
 - UPC: "${visionParsed.upc || ''}"
 - Brand: "${visionParsed.brand || ''}"
-  - Size: "${visionParsed.sizeValue || ''} ${visionParsed.sizeUnit || ''}"
-  - Text snippet: "${visionParsed.snippet || ''}"`;
+- Size: "${visionParsed.sizeValue || ''} ${visionParsed.sizeUnit || ''}"
+- Text snippet: "${visionParsed.snippet || ''}"`;
 
   try {
     console.info('Gemini product image data:', {

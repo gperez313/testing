@@ -86,7 +86,8 @@ const tierRank = {
   BRONZE: 1,
   SILVER: 2,
   GOLD: 3,
-  PLATINUM: 4
+  PLATINUM: 4,
+  GREEN: 5
 };
 
 const autoTierForUser = (user) => {
@@ -96,14 +97,18 @@ const autoTierForUser = (user) => {
 
   if (ordersCompleted >= 15 && photoIdVerified) return 'GOLD';
   if (ordersCompleted >= 10 && phoneVerified) return 'SILVER';
+  if (ordersCompleted >= 5) return 'BRONZE';
   return 'COMMON';
 };
 
 const maybeAutoPromote = ({ user }) => {
-  if (user.membershipTier === 'PLATINUM') return;
+  // Platinum and Green are invite-only (manual set by Owner)
+  if (user.membershipTier === 'PLATINUM' || user.membershipTier === 'GREEN') return;
 
   const autoTier = autoTierForUser(user);
   const currentTier = normalizeTier(user.membershipTier);
+  
+  // Only auto-promote up to GOLD
   if ((tierRank[autoTier] || 0) > (tierRank[currentTier] || 0)) {
     user.membershipTier = autoTier;
   }

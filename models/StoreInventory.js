@@ -60,7 +60,8 @@ const storeInventorySchema = new mongoose.Schema(
       workflowType: {
         type: String,
         enum: ['new_product', 'update_price', 'unmapped']
-      }
+      },
+      isDeposit: { type: Boolean, default: false }
     }],
     
     // Track which captures have been applied (idempotency)

@@ -105,7 +105,7 @@ router.post('/', authRequired, ownerRequired, async (req, res) => {
       stock,
       sizeOz,
       category,
-      image,
+      _image,
       isGlass,
       brand,
       productType,

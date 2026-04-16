@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { XCircle, Plus, Search } from 'lucide-react';
 import { UnmappedUpcData, SizeUnit } from '../types';
 import { useNinpoCore } from '../hooks/useNinpoCore';
@@ -30,32 +30,17 @@ const UnmappedUpcModal: React.FC<UnmappedUpcModalProps> = ({
   const { addToast } = useNinpoCore();
   const [activeTab, setActiveTab] = useState<'create' | 'attach'>('create');
   const [createForm, setCreateForm] = useState({
-    name: '',
-    price: 0,
-    deposit: 0,
+    name: data?.name || '',
+    price: data?.price || 0,
+    deposit: data?.deposit || 0,
     stock: 1,
-    sizeOz: 0,
+    sizeOz: data?.sizeOz || 0,
     sizeUnit: 'oz' as SizeUnit,
-    category: 'DRINK',
+    category: data?.category || 'DRINK',
     nutritionNote: ''
   });
   const [attachSearch, setAttachSearch] = useState('');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (data) {
-      setCreateForm(prev => ({
-        ...prev,
-        name: data.name || prev.name,
-        price: data.price || prev.price,
-        deposit: data.deposit || prev.deposit,
-        sizeOz: data.sizeOz || prev.sizeOz,
-        sizeUnit: prev.sizeUnit,
-        category: data.category || prev.category,
-        nutritionNote: prev.nutritionNote
-      }));
-    }
-  }, [data]);
 
   const _sizeUnitOptions: SizeUnit[] = ['oz', 'fl oz', 'g', 'kg', 'ml', 'l'];
 

@@ -3,7 +3,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { authRequired } from '../utils/helpers.js';
 import { findCheapestStores, optimizeStoreSelection, calculateMultiStopRoute } from '../utils/storeRouting.js';
-import { calculateOrderLoad, findEligibleBatch, createBatch, addOrderToBatch, getBatchCapacity } from '../utils/batching.js';
+import { calculateOrderLoad, findEligibleBatch, _createBatch, _addOrderToBatch, getBatchCapacity } from '../utils/batching.js';
 import { getDeliveryOptions } from '../utils/deliveryFees.js';
 import StoreInventory from '../models/StoreInventory.js';
 import Store from '../models/Store.js';
@@ -116,7 +116,7 @@ router.post('/shopping/checkout-preview', authRequired, async (req, res) => {
             lng: geocoded.lng,
             formattedAddress: geocoded.formattedAddress || deliveryAddress?.formattedAddress
           };
-        } catch (err) {
+        } catch (_err) {
           return res.status(400).json({ error: 'Failed to geocode delivery address' });
         }
       }
@@ -137,7 +137,7 @@ router.post('/shopping/checkout-preview', authRequired, async (req, res) => {
     try {
       fulfillmentPlan = await findCheapestStores(normalizedItems, storeSelectionContext);
       optimized = await optimizeStoreSelection(fulfillmentPlan, storeSelectionContext);
-    } catch (err) {
+    } catch (_err) {
       return res.status(500).json({ error: 'Failed to find or optimize store fulfillment' });
     }
 
@@ -182,7 +182,7 @@ router.post('/shopping/checkout-preview', authRequired, async (req, res) => {
         [{ location: hub.location }, ...stores.map(s => ({ location: s.location }))],
         [resolvedDeliveryAddress]
       );
-    } catch (err) {
+    } catch (_err) {
       return res.status(500).json({ error: 'Failed to calculate delivery route' });
     }
 

@@ -41,7 +41,7 @@ export function classifyItem(
 ): ClassifiedReceiptItem {
   const {
     autoUpdateThreshold = 0.85,
-    reviewThreshold = 0.5
+    _reviewThreshold = 0.5
   } = config;
 
   const unitPrice = item.totalPrice / item.quantity;

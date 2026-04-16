@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import Store from '../models/Store.js';
 import connectDB from '../db/connect.js';

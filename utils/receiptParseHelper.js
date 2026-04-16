@@ -700,7 +700,7 @@ export async function executeReceiptParse(captureId, actorId = 'worker', options
         address: candidateAddress,
         storeType: candidateStoreType
       };
-      const matchResult = await matchStoreCandidate(matchPayload);
+      const matchResult = await matchStoreCandidate(matchPayload, { items: draftItems });
       storeMatchResult = matchResult;
       if (matchResult?.match) {
         storeCandidate = { ...matchResult.match, confidence: matchResult.confidence };

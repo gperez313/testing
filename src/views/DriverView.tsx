@@ -12,12 +12,17 @@ import {
   PackageCheck,
   Navigation2,
   UserCheck,
-  XCircle
+  XCircle,
+  DollarSign,
+  BarChart3,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import ScannerModal from '../components/ScannerModal';
 import DriverVerificationDelivery from './DriverVerificationDelivery';
 import DriverOrderFlow from '../components/DriverOrderFlow';
 import DriverOrderDetail from '../components/DriverOrderDetail';
+import DriverDashboard from '../components/DriverDashboard';
 import { useNinpoCore } from '../hooks/useNinpoCore';
 import useCameraStream from '../hooks/useCameraStream';
 
@@ -118,6 +123,12 @@ const DriverView: React.FC<DriverViewProps> = ({ currentUser, orders, updateOrde
     message: string;
   } | null>(null);
 
+  const [cashReconciliation, setCashReconciliation] = useState<{
+    count: number;
+    totalAmount: number;
+    payouts: any[];
+  } | null>(null);
+
   // Return verification state
   const [verificationScans, setVerificationScans] = useState<{ upc: string; timestamp: string }[]>([]);
   const [recognizedCount, setRecognizedCount] = useState(0);
@@ -138,10 +149,27 @@ const DriverView: React.FC<DriverViewProps> = ({ currentUser, orders, updateOrde
   const [driverMode, setDriverMode] = useState<'RETURNS_INTAKE' | 'PICK_PACK'>('RETURNS_INTAKE');
   const [scannerMode, setScannerMode] = useState<ScannerMode>(ScannerMode.DRIVER_VERIFY_CONTAINERS);
   const [workflowMode, setWorkflowMode] = useState<'verification' | 'delivery'>('delivery');
+  const [viewTab, setViewTab] = useState<'DASHBOARD' | 'DISPATCH' | 'ACTIVE' | 'SCANNER'>('DASHBOARD');
 
-  const handleScannerModeChange = useCallback((mode: ScannerMode) => {
-    setScannerMode(mode);
+  const fetchCashReconciliation = useCallback(async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/driver/cash-reconciliation`, {
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setCashReconciliation(data.today);
+      }
+    } catch (err) {
+      console.error('Failed to fetch cash reconciliation:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchCashReconciliation();
+    }
+  }, [currentUser, fetchCashReconciliation]);
 
   const handleAccept = async (orderId: string) => {
     if (!orderId) return;
@@ -1223,7 +1251,16 @@ const DriverView: React.FC<DriverViewProps> = ({ currentUser, orders, updateOrde
     <div className="space-y-10 animate-in fade-in">
       <div className="bg-ninpo-midnight p-8 rounded-[3rem] border border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 shadow-2xl">
         <h2 className="text-2xl font-black uppercase tracking-tighter">Driver Hub</h2>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
+          {cashReconciliation && (
+            <div className="px-6 py-3 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
+              <DollarSign className="w-4 h-4 text-white" />
+              <div>
+                <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Today's Cash Out</p>
+                <p className="text-sm font-black text-white uppercase">{money(cashReconciliation.totalAmount)}</p>
+              </div>
+            </div>
+          )}
           <div className="px-6 py-3 bg-ninpo-lime/10 rounded-2xl border border-ninpo-lime/20 flex items-center gap-3">
             <Zap className="w-4 h-4 text-ninpo-lime" />
             <p className="text-sm font-black text-ninpo-lime uppercase">UNIT STATUS: ACTIVE</p>
@@ -1231,302 +1268,411 @@ const DriverView: React.FC<DriverViewProps> = ({ currentUser, orders, updateOrde
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <button
-          onClick={() => {
-            setDriverMode('RETURNS_INTAKE');
-            setScannerMode(ScannerMode.DRIVER_VERIFY_CONTAINERS);
-          }}
-          className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-            driverMode === 'RETURNS_INTAKE' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
-          }`}
-        >
-          Returns Intake
-        </button>
-        <button
-          onClick={() => {
-            setDriverMode('PICK_PACK');
-            setScannerMode(ScannerMode.DRIVER_FULFILL_ORDER);
-          }}
-          className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-            driverMode === 'PICK_PACK' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
-          }`}
-        >
-          Pick/Pack Orders
-        </button>
+      {/* Main Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 p-1 bg-white/5 rounded-[2rem] border border-white/10 w-fit">
+        {[
+          { id: 'DASHBOARD', label: 'Dashboard', icon: BarChart3 },
+          { id: 'DISPATCH', label: 'Dispatch Queue', icon: Clock },
+          { id: 'ACTIVE', label: 'Active Delivery', icon: Navigation2, disabled: !activeOrder },
+          { id: 'SCANNER', label: 'Scan Panel', icon: ScanLine },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            disabled={tab.disabled}
+            onClick={() => setViewTab(tab.id as any)}
+            className={`px-6 py-3 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${
+              viewTab === tab.id
+                ? 'bg-ninpo-lime text-ninpo-black shadow-neon'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex gap-4">
-        <button
-          onClick={() => setWorkflowMode('delivery')}
-          className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-            workflowMode === 'delivery' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
-          }`}
-        >
-          Delivery Workflow
-        </button>
-        <button
-          onClick={() => setWorkflowMode('verification')}
-          className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-            workflowMode === 'verification' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
-          }`}
-        >
-          Container Verification
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6">
-          <h3 className="text-white font-black uppercase text-xs tracking-widest flex items-center gap-3">
-            <Clock className="w-4 h-4 text-ninpo-lime" /> Dispatch Queue
-          </h3>
-
-          {queue.map(o => (
-            <div key={o.id} className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-8 space-y-6">
-              <div className="flex justify-between items-start gap-4">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black text-slate-600 uppercase">ORDER: {o.id}</p>
-                  <p className="text-white font-black text-lg uppercase mt-1 truncate">
-                    {o.address ? o.address : 'No address provided'}
-                  </p>
-                  <p className="text-[9px] font-black text-ninpo-lime uppercase mt-2 tracking-widest">
-                    STATUS: {String(o.status).replace('_', ' ')}
-                  </p>
-
-                  <div className="mt-4 space-y-1">
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                      Total (pre-credit): <span className="text-white">{money(o.total)}</span>
-                    </p>
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                      Route fee: <span className="text-white">{money(o.routeFee || 0)}</span>
-                    </p>
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                      Est. return credit:{' '}
-                      <span className="text-ninpo-lime">{money(o.estimatedReturnCredit || 0)}</span>
-                    </p>
-                  </div>
-                </div>
-
-                {(o.status === OrderStatus.PENDING || o.status === OrderStatus.ASSIGNED) &&
-                  currentUser?.role === UserRole.OWNER && (
-                    <button
-                      onClick={() => handleCancel(o.id)}
-                      className="px-4 py-3 rounded-xl bg-ninpo-red/10 text-ninpo-red border border-ninpo-red/20 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-ninpo-red/20 transition"
-                      title="Cancel (restocks inventory immediately)"
-                    >
-                      <XCircle className="w-4 h-4" /> Cancel
-                    </button>
-                  )}
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-3">
-                {(o.status === OrderStatus.PENDING ||
-                  o.status === OrderStatus.AUTHORIZED ||
-                  o.status === OrderStatus.PAID) && (
-                  <button
-                    onClick={() => handleAccept(o.id)}
-                    className="flex-1 py-4 bg-ninpo-lime text-ninpo-black rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"
-                  >
-                    <UserCheck className="w-4 h-4" /> Accept / Assign to Me
-                  </button>
-                )}
-
-                {o.status === OrderStatus.ASSIGNED && (
-                  <button
-                    onClick={() => handlePickUp(o.id)}
-                    className="flex-1 py-4 bg-ninpo-lime text-ninpo-black rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"
-                  >
-                    <PackageCheck className="w-4 h-4" /> Mark Picked Up
-                  </button>
-                )}
-
-                {(o.status === OrderStatus.PICKED_UP || o.status === OrderStatus.ARRIVING) && (
-                  <button
-                    onClick={() => handleStartNavigation(o.id)}
-                    disabled={isNavigating && o.status === OrderStatus.ARRIVING}
-                    className="flex-1 py-4 bg-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/20 transition-all disabled:opacity-50"
-                  >
-                    <Navigation2 className="w-4 h-4" /> {isNavigating ? 'Navigating...' : 'Start Navigation'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Scanner Mode
-                </p>
-                <p className="text-white font-black text-lg uppercase">Driver Scan Panel</p>
-              </div>
-              <button
-                onClick={() => setScannerOpen(true)}
-                className="px-4 py-3 rounded-2xl bg-ninpo-lime text-ninpo-black text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
-              >
-                <ScanLine className="w-4 h-4" /> Open Scanner
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  setScannerMode(ScannerMode.DRIVER_VERIFY_CONTAINERS);
-                  setDriverMode('RETURNS_INTAKE');
-                }}
-                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-                  scannerMode === ScannerMode.DRIVER_VERIFY_CONTAINERS
-                    ? 'bg-ninpo-lime text-ninpo-black'
-                    : 'bg-white/5 text-white'
-                }`}
-              >
-                Returns Verification
-              </button>
-              <button
-                onClick={() => {
-                  setScannerMode(ScannerMode.DRIVER_FULFILL_ORDER);
-                  setDriverMode('PICK_PACK');
-                }}
-                className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
-                  scannerMode === ScannerMode.DRIVER_FULFILL_ORDER
-                    ? 'bg-ninpo-lime text-ninpo-black'
-                    : 'bg-white/5 text-white'
-                }`}
-              >
-                Fulfillment Scan
-              </button>
-            </div>
-
-            {scannerError && (
-              <div className="rounded-2xl bg-ninpo-red/10 border border-ninpo-red/30 px-4 py-3 text-[10px] uppercase tracking-widest text-ninpo-red">
-                {scannerError}
-              </div>
-            )}
-
-            {!activeOrder && (
-              <p className="text-[11px] text-slate-400">
-                Select an order from the queue to scan returns or fulfill items.
-              </p>
-            )}
-
-            {activeOrder && scannerMode === ScannerMode.DRIVER_FULFILL_ORDER && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-slate-400">
-                  <span>Fulfillment Progress</span>
-                  <span>
-                    {fulfillmentScans.reduce((sum, entry) => sum + entry.quantity, 0)}/
-                    {fulfillmentTargets.reduce((sum, entry) => sum + entry.quantity, 0)} scanned
-                  </span>
-                </div>
-                {fulfillmentMissingUpcs > 0 && (
-                  <p className="text-[10px] uppercase tracking-widest text-ninpo-red">
-                    {fulfillmentMissingUpcs} items missing UPC mapping.
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {fulfillmentProgress.map(entry => (
-                    <div
-                      key={entry.key}
-                      className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
-                    >
-                      <div>
-                        <p className="text-[11px] font-black text-white uppercase">{entry.label}</p>
-                        <p className="text-[9px] uppercase tracking-widest text-slate-500">
-                          {entry.upcCandidates.length > 0
-                            ? `UPC(s): ${entry.upcCandidates.join(', ')}`
-                            : 'UPC missing'}
-                        </p>
-                      </div>
-                      <div className="text-[11px] font-black text-ninpo-lime uppercase">
-                        {entry.scanned}/{entry.quantity}
-                      </div>
-                    </div>
-                  ))}
-                  {fulfillmentProgress.length === 0 && (
-                    <p className="text-[11px] text-slate-400">
-                      No fulfillment items found for this order.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
+      {driverNotice && (
+        <div className={`p-6 rounded-[2.5rem] border flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500 ${
+          driverNotice.tone === 'success' 
+            ? 'bg-ninpo-lime/10 border-ninpo-lime/20 text-ninpo-lime' 
+            : 'bg-ninpo-red/10 border-ninpo-red/20 text-ninpo-red'
+        }`}>
+          {driverNotice.tone === 'success' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{driverNotice.tone === 'success' ? 'Success' : 'Attention Required'}</p>
+            <p className="text-sm font-black uppercase tracking-widest">{driverNotice.message}</p>
           </div>
+          <button 
+            onClick={() => setDriverNotice(null)}
+            className="ml-auto p-2 hover:bg-white/10 rounded-xl transition-colors"
+          >
+            <XCircle className="w-5 h-5" />
+          </button>
         </div>
+      )}
 
-        {lastBlockedUpc && lastBlockedReason === 'duplicate' && (
-          <div className="flex items-center gap-2">
+      {viewTab === 'DASHBOARD' && (
+        <DriverDashboard _onSelectOrder={(id) => {
+          setDetailOrderId(id);
+        }} />
+      )}
+
+      {viewTab === 'DISPATCH' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex gap-4">
             <button
-              onClick={() => handleScannerScan(lastBlockedUpc)}
-              className="px-4 py-3 rounded-2xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10"
+              onClick={() => {
+                setDriverMode('RETURNS_INTAKE');
+                setScannerMode(ScannerMode.DRIVER_VERIFY_CONTAINERS);
+              }}
+              className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                driverMode === 'RETURNS_INTAKE' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
+              }`}
             >
-              Add anyway
+              Returns Intake
+            </button>
+            <button
+              onClick={() => {
+                setDriverMode('PICK_PACK');
+                setScannerMode(ScannerMode.DRIVER_FULFILL_ORDER);
+              }}
+              className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                driverMode === 'PICK_PACK' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
+              }`}
+            >
+              Pick/Pack Orders
             </button>
           </div>
-        )}
 
-        <ScannerModal
-          mode={scannerMode}
-          onScan={handleScannerScan}
-          onClose={() => {
-            setScannerOpen(false);
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <h3 className="text-white font-black uppercase text-xs tracking-widest flex items-center gap-3">
+                <Clock className="w-4 h-4 text-ninpo-lime" /> Dispatch Queue
+              </h3>
+
+              {queue.length === 0 && (
+                <div className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-12 text-center">
+                  <PackageCheck className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-500 text-xs uppercase tracking-widest font-black">Queue is empty</p>
+                  <p className="text-slate-600 text-[10px] mt-2 uppercase tracking-widest">No orders awaiting dispatch at this time.</p>
+                </div>
+              )}
+
+              {queue.map(o => (
+                <div key={o.id} className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-8 space-y-6 group hover:border-ninpo-lime/30 transition-all">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black text-slate-600 uppercase">ORDER: {o.id}</p>
+                      <p className="text-white font-black text-lg uppercase mt-1 truncate">
+                        {o.address ? o.address : 'No address provided'}
+                      </p>
+                      <p className="text-[9px] font-black text-ninpo-lime uppercase mt-2 tracking-widest">
+                        STATUS: {String(o.status).replace('_', ' ')}
+                      </p>
+
+                      <div className="mt-4 space-y-1">
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                          Total (pre-credit): <span className="text-white">{money(o.total)}</span>
+                        </p>
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                          Route fee: <span className="text-white">{money(o.routeFee || 0)}</span>
+                        </p>
+                        <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                          Est. return credit:{' '}
+                          <span className="text-ninpo-lime">{money(o.estimatedReturnCredit || 0)}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {(o.status === OrderStatus.PENDING || o.status === OrderStatus.ASSIGNED) &&
+                      currentUser?.role === UserRole.OWNER && (
+                        <button
+                          onClick={() => handleCancel(o.id)}
+                          className="px-4 py-3 rounded-xl bg-ninpo-red/10 text-ninpo-red border border-ninpo-red/20 text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-ninpo-red/20 transition"
+                          title="Cancel (restocks inventory immediately)"
+                        >
+                          <XCircle className="w-4 h-4" /> Cancel
+                        </button>
+                      )}
+                  </div>
+
+                  <div className="flex flex-col md:flex-row gap-3">
+                    {(o.status === OrderStatus.PENDING ||
+                      o.status === OrderStatus.AUTHORIZED ||
+                      o.status === OrderStatus.PAID) && (
+                      <button
+                        onClick={() => {
+                          handleAccept(o.id);
+                          setViewTab('ACTIVE');
+                        }}
+                        className="flex-1 py-4 bg-ninpo-lime text-ninpo-black rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"
+                      >
+                        <UserCheck className="w-4 h-4" /> Accept / Assign to Me
+                      </button>
+                    )}
+
+                    {o.status === OrderStatus.ASSIGNED && (
+                      <button
+                        onClick={() => {
+                          handlePickUp(o.id);
+                          setActiveOrder(o);
+                          setViewTab('ACTIVE');
+                        }}
+                        className="flex-1 py-4 bg-ninpo-lime text-ninpo-black rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-all"
+                      >
+                        <PackageCheck className="w-4 h-4" /> Mark Picked Up
+                      </button>
+                    )}
+
+                    {(o.status === OrderStatus.PICKED_UP || o.status === OrderStatus.ARRIVING) && (
+                      <button
+                        onClick={() => {
+                          handleStartNavigation(o.id);
+                          setActiveOrder(o);
+                          setViewTab('ACTIVE');
+                        }}
+                        disabled={isNavigating && o.status === OrderStatus.ARRIVING}
+                        className="flex-1 py-4 bg-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/20 transition-all disabled:opacity-50"
+                      >
+                        <Navigation2 className="w-4 h-4" /> {isNavigating ? 'Navigating...' : 'Start Navigation'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-8 text-center">
+                <BarChart3 className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+                <p className="text-slate-500 text-xs uppercase tracking-widest font-black">Operational Stats</p>
+                <p className="text-slate-600 text-[10px] mt-2 uppercase tracking-widest">View your performance in the Dashboard tab.</p>
+                <button 
+                  onClick={() => setViewTab('DASHBOARD')}
+                  className="mt-6 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Go to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewTab === 'ACTIVE' && activeOrder && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {workflowMode === 'delivery' ? (
+            <DriverOrderFlow
+              order={activeOrder}
+              onBack={() => {
+                setViewTab('DISPATCH');
+                setActiveOrder(null);
+                setIsVerifying(false);
+              }}
+              onRefresh={() => {
+                // Refresh the active order with updated status
+              }}
+            />
+          ) : (
+            <DriverVerificationDelivery
+              activeOrder={activeOrder}
+              onBack={() => {
+                setViewTab('DISPATCH');
+                setActiveOrder(null);
+                setIsVerifying(false);
+              }}
+              scannerMode={scannerMode}
+              setScannerMode={setScannerMode}
+              setScannerOpen={setScannerOpen}
+              scannerError={scannerError}
+              verificationScans={verificationScans}
+              onClearVerification={_clearVerification}
+              onSubmitVerification={_completeDelivery}
+              isVerifying={isVerifying}
+              capturedPhoto={returnCapturedPhoto}
+              onCapturePhoto={() => {
+                setScannerMode(ScannerMode.DRIVER_VERIFY_CONTAINERS);
+                setScannerOpen(true);
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {viewTab === 'SCANNER' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setWorkflowMode('delivery')}
+              className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                workflowMode === 'delivery' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
+              }`}
+            >
+              Delivery Workflow
+            </button>
+            <button
+              onClick={() => setWorkflowMode('verification')}
+              className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                workflowMode === 'verification' ? 'bg-ninpo-lime text-ninpo-black' : 'bg-white/5 text-white'
+              }`}
+            >
+              Container Verification
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="bg-ninpo-card border border-white/5 rounded-[2.5rem] p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Scanner Mode
+                    </p>
+                    <p className="text-white font-black text-lg uppercase">Driver Scan Panel</p>
+                  </div>
+                  <button
+                    onClick={() => setScannerOpen(true)}
+                    className="px-4 py-3 rounded-2xl bg-ninpo-lime text-ninpo-black text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    <ScanLine className="w-4 h-4" /> Open Scanner
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setScannerMode(ScannerMode.DRIVER_VERIFY_CONTAINERS);
+                      setDriverMode('RETURNS_INTAKE');
+                    }}
+                    className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                      scannerMode === ScannerMode.DRIVER_VERIFY_CONTAINERS
+                        ? 'bg-ninpo-lime text-ninpo-black'
+                        : 'bg-white/5 text-white'
+                    }`}
+                  >
+                    Returns Verification
+                  </button>
+                  <button
+                    onClick={() => {
+                      setScannerMode(ScannerMode.DRIVER_FULFILL_ORDER);
+                      setDriverMode('PICK_PACK');
+                    }}
+                    className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest ${
+                      scannerMode === ScannerMode.DRIVER_FULFILL_ORDER
+                        ? 'bg-ninpo-lime text-ninpo-black'
+                        : 'bg-white/5 text-white'
+                    }`}
+                  >
+                    Fulfillment Scan
+                  </button>
+                </div>
+
+                {scannerError && (
+                  <div className="rounded-2xl bg-ninpo-red/10 border border-ninpo-red/30 px-4 py-3 text-[10px] uppercase tracking-widest text-ninpo-red">
+                    {scannerError}
+                  </div>
+                )}
+
+                {!activeOrder && (
+                  <p className="text-[11px] text-slate-400">
+                    Select an order from the queue to scan returns or fulfill items.
+                  </p>
+                )}
+
+                {activeOrder && scannerMode === ScannerMode.DRIVER_FULFILL_ORDER && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-slate-400">
+                      <span>Fulfillment Progress</span>
+                      <span>
+                        {fulfillmentScans.reduce((sum, entry) => sum + entry.quantity, 0)}/
+                        {fulfillmentTargets.reduce((sum, entry) => sum + entry.quantity, 0)} scanned
+                      </span>
+                    </div>
+                    {fulfillmentMissingUpcs > 0 && (
+                      <p className="text-[10px] uppercase tracking-widest text-ninpo-red">
+                        {fulfillmentMissingUpcs} items missing UPC mapping.
+                      </p>
+                    )}
+                    <div className="space-y-2">
+                      {fulfillmentProgress.map(entry => (
+                        <div
+                          key={entry.key}
+                          className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3"
+                        >
+                          <div>
+                            <p className="text-[11px] font-black text-white uppercase">{entry.label}</p>
+                            <p className="text-[9px] uppercase tracking-widest text-slate-500">
+                              {entry.upcCandidates.length > 0
+                                ? `UPC(s): ${entry.upcCandidates.join(', ')}`
+                                : 'UPC missing'}
+                            </p>
+                          </div>
+                          <div className="text-[11px] font-black text-ninpo-lime uppercase">
+                            {entry.scanned}/{entry.quantity}
+                          </div>
+                        </div>
+                      ))}
+                      {fulfillmentProgress.length === 0 && (
+                        <p className="text-[11px] text-slate-400">
+                          No fulfillment items found for this order.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {lastBlockedUpc && lastBlockedReason === 'duplicate' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleScannerScan(lastBlockedUpc)}
+                    className="px-4 py-3 rounded-2xl bg-white/10 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-white/10"
+                  >
+                    Add anyway
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ScannerModal
+        mode={scannerMode}
+        onScan={handleScannerScan}
+        onClose={() => {
+          setScannerOpen(false);
+          setLastBlockedUpc(null);
+          setLastBlockedReason(null);
+        }}
+        onModeChange={handleScannerModeChange}
+        onCooldown={(upc, reason) => {
+          addToast('Same UPC — tap to add again', 'info');
+          if (reason === 'duplicate') {
+            setLastBlockedUpc(upc);
+            setLastBlockedReason(reason);
+          } else {
             setLastBlockedUpc(null);
-            setLastBlockedReason(null);
-          }}
-          onModeChange={handleScannerModeChange}
-          onCooldown={(upc, reason) => {
-            addToast('Same UPC — tap to add again', 'info');
-            if (reason === 'duplicate') {
-              setLastBlockedUpc(upc);
-              setLastBlockedReason(reason);
-            } else {
-              setLastBlockedUpc(null);
-              setLastBlockedReason(reason);
-            }
-          }}
-          title={driverScannerTitle}
-          subtitle={driverScannerSubtitle}
-          beepEnabled
-          cooldownMs={1200}
-          isOpen={scannerOpen}
-          closeOnScan={false}
+            setLastBlockedReason(reason);
+          }
+        }}
+        title={driverScannerTitle}
+        subtitle={driverScannerSubtitle}
+        beepEnabled
+        cooldownMs={1200}
+        isOpen={scannerOpen}
+        closeOnScan={false}
+      />
+
+      {detailOrderId && (
+        <DriverOrderDetail
+          order={orders.find(o => o.id === detailOrderId || o.orderId === detailOrderId) || { orderId: detailOrderId }}
+          onBack={() => setDetailOrderId(null)}
         />
-
-        {activeOrder && workflowMode === 'delivery' && (
-          <DriverOrderFlow
-            order={activeOrder}
-            onBack={() => {
-              setActiveOrder(null);
-              setIsVerifying(false);
-            }}
-            onRefresh={() => {
-              // Refresh the active order with updated status
-            }}
-          />
-        )}
-
-        {activeOrder && workflowMode === 'verification' && (
-          <DriverVerificationDelivery
-            activeOrder={activeOrder}
-            driverNotice={driverNotice}
-            setDriverNotice={setDriverNotice}
-            workflowMode={workflowMode}
-            setScannerMode={setScannerMode}
-            setScannerOpen={setScannerOpen}
-            scannerError={scannerError}
-            // ...pass all other required props...
-          />
-        )}
-
-        {detailOrderId && (
-          <DriverOrderDetail
-            order={orders.find(o => o.id === detailOrderId || o.orderId === detailOrderId) || { orderId: detailOrderId }}
-            onBack={() => setDetailOrderId(null)}
-          />
-        )}
-      </div>
+      )}
     </div>
   );
 };

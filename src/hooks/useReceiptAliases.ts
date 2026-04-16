@@ -71,7 +71,7 @@ export const useReceiptAliases = (activeStoreId: string) => {
       }
       const data = await resp.json().catch(() => ({}));
       setNoiseRules(Array.isArray(data.rules) ? data.rules : []);
-    } catch (err: any) {
+    } catch (_err: any) {
       // Silently fail for noise rules
       setNoiseRules([]);
     } finally {

@@ -155,7 +155,7 @@ function parseDriverStoreAccess() {
         ])
       );
     }
-  } catch (err) {
+  } catch (_err) {
     // Fallback: semicolon-separated entries like "driver:store1,store2"
     map = {};
     const entries = raw.split(';').map(s => s.trim()).filter(Boolean);

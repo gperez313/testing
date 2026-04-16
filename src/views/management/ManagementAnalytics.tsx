@@ -1,5 +1,5 @@
 // src/views/management/ManagementAnalytics.tsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { TrendingUp, Users, ShoppingCart, Package, BarChart3, RefreshCw } from 'lucide-react';
 import { analytics } from '../../services/analyticsService';
 
@@ -13,7 +13,7 @@ interface AnalyticsEvent {
 }
 
 export default function ManagementAnalytics() {
-  const [events, setEvents] = useState<AnalyticsEvent[]>([]);
+  const [events, setEvents] = useState<AnalyticsEvent[]>(() => analytics.getStoredEvents());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [referenceTime, setReferenceTime] = useState(() => Date.now());
 
@@ -24,10 +24,6 @@ export default function ManagementAnalytics() {
     setReferenceTime(Date.now());
     setTimeout(() => setIsRefreshing(false), 300);
   }, []);
-
-  useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
 
   // Calculate statistics
   const stats = useMemo(() => {

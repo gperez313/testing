@@ -19,11 +19,11 @@ interface ManagementSettingsProps {
 
 const ManagementSettings: React.FC<ManagementSettingsProps> = ({
   settingsDraft,
-  setSettingsDraft,
-  settingsDirty,
-  setSettingsDirty,
+  _setSettingsDraft,
+  _settingsDirty,
+  _setSettingsDirty,
   isSavingSettings,
-  setIsSavingSettings,
+  _setIsSavingSettings,
   settingsError,
   setSettingsError,
   settingsSaved,
@@ -159,6 +159,10 @@ const ManagementSettings: React.FC<ManagementSettingsProps> = ({
         <label className="flex items-center gap-3 text-sm font-bold text-slate-300">
           <input type="checkbox" checked={!!settingsDraft.allowReceiptApprovalCreateProduct} onChange={e => updateSettingsDraft({ allowReceiptApprovalCreateProduct: e.target.checked })} />
           Allow Receipt Approval Create Product
+        </label>
+        <label className="flex items-center gap-3 text-sm font-bold text-slate-300">
+          <input type="checkbox" checked={!!settingsDraft.autoUpdateProductPriceFromReceipt} onChange={e => updateSettingsDraft({ autoUpdateProductPriceFromReceipt: e.target.checked })} />
+          Auto-Update Product Prices from Receipts
         </label>
       </div>
       <button

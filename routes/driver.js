@@ -2,6 +2,9 @@ import express from 'express';
 import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import Store from '../models/Store.js';
+import CashPayout from '../models/CashPayout.js';
+import StoreInventory from '../models/StoreInventory.js';
 import {
   authRequired,
   isDriverUsername,
@@ -290,15 +293,15 @@ router.post('/complete-delivery', driverOnly, async (req, res) => {
 });
 
 /**
- * GET /api/driver/order/:orderId/shopping-list
+ * GET /api/driver/shopping-list
  * Get detailed shopping list with stores and items
  */
-router.get('/order/:orderId/shopping-list', driverOnly, async (req, res) => {
+router.get('/shopping-list', driverOnly, async (req, res) => {
   if (!isDbReady()) {
     return res.status(503).json({ error: 'Database not ready' });
   }
   try {
-    const orderId = String(req.params?.orderId || '').trim();
+    const orderId = String(req.query?.orderId || '').trim();
     if (!orderId) {
       return res.status(400).json({ error: 'orderId is required' });
     }
@@ -313,19 +316,30 @@ router.get('/order/:orderId/shopping-list', driverOnly, async (req, res) => {
       return res.status(403).json({ error: 'This order is not assigned to you' });
     }
 
-    // Fetch product details and organize by store (assuming single store for now)
+    // Fetch product details and organize by store
     const productIds = (order.items || []).map(it => it.productId);
     const products = await Product.find({ frontendId: { $in: productIds } }).lean();
     const productMap = new Map(products.map(p => [p.frontendId, p]));
 
+    // Fetch store details
+    const storeIds = [...new Set((order.items || []).map(it => it.storeId).filter(Boolean))];
+    const stores = await Store.find({ _id: { $in: storeIds } }).lean();
+    const storeMap = new Map(stores.map(s => [s._id.toString(), s]));
+
     const shoppingList = (order.items || []).map(item => {
       const product = productMap.get(item.productId);
+      const store = storeMap.get(item.storeId);
+      const storeAddress = store ? `${store.address.street}, ${store.address.city}, ${store.address.state} ${store.address.zip}` : '';
+      
       return {
         productId: item.productId,
         name: product?.name || item.productId,
         quantity: item.quantity,
         price: product?.price || 0,
-        instructions: product?.storageInstructions || ''
+        instructions: product?.storageInstructions || '',
+        store: store?.name || 'Unknown Store',
+        storeId: item.storeId,
+        storeAddress
       };
     });
 
@@ -465,6 +479,161 @@ router.get('/performance', authRequired, async (req, res) => {
   } catch (err) {
     console.error('PERFORMANCE ERROR:', err);
     res.status(500).json({ error: 'Failed to fetch performance metrics' });
+  }
+});
+
+/**
+ * GET /api/driver/cash-reconciliation
+ * Driver cash payout reconciliation (today's authorized payouts)
+ */
+router.get('/cash-reconciliation', authRequired, async (req, res) => {
+  if (!isDbReady()) {
+    return res.status(503).json({ error: 'Database not ready' });
+  }
+  try {
+    const driverId = req.user?.username || req.user?.id;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const payouts = await CashPayout.find({
+      driverId,
+      createdAt: { $gte: today },
+      status: { $ne: 'CANCELLED' }
+    }).lean();
+
+    const totalAmount = payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    res.json({
+      ok: true,
+      today: {
+        count: payouts.length,
+        totalAmount,
+        payouts: payouts.map(p => ({
+          id: p._id,
+          amount: p.amount,
+          orderId: p.orderId,
+          status: p.status,
+          createdAt: p.createdAt
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('CASH RECONCILIATION ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch cash reconciliation' });
+  }
+});
+
+/**
+ * GET /api/driver/price-intelligence-stats
+ * Returns count of price updates contributed by the driver
+ */
+router.get('/price-intelligence-stats', authRequired, async (req, res) => {
+  if (!isDbReady()) {
+    return res.status(503).json({ error: 'Database not ready' });
+  }
+  try {
+    const driverId = req.user?.username || req.user?.id;
+    
+    // Count entries in priceHistory across all StoreInventory documents
+    const stats = await StoreInventory.aggregate([
+      { $unwind: '$priceHistory' },
+      { $match: { 'priceHistory.confirmedBy': driverId } },
+      { $group: { _id: null, totalContributions: { $sum: 1 } } }
+    ]);
+
+    res.json({
+      ok: true,
+      totalContributions: stats[0]?.totalContributions || 0
+    });
+  } catch (err) {
+    console.error('PRICE INTELLIGENCE STATS ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch price intelligence stats' });
+  }
+});
+
+/**
+ * GET /api/driver/leaderboard
+ * Returns top drivers by price intelligence contributions
+ */
+router.get('/leaderboard', authRequired, async (req, res) => {
+  if (!isDbReady()) {
+    return res.status(503).json({ error: 'Database not ready' });
+  }
+  try {
+    const leaderboard = await StoreInventory.aggregate([
+      { $unwind: '$priceHistory' },
+      { $match: { 'priceHistory.confirmedBy': { $exists: true, $ne: null } } },
+      { 
+        $group: { 
+          _id: '$priceHistory.confirmedBy', 
+          contributions: { $sum: 1 } 
+        } 
+      },
+      { $sort: { contributions: -1 } },
+      { $limit: 10 }
+    ]);
+
+    // Enhance with "masked" names if needed or just return driver IDs
+    res.json({
+      ok: true,
+      leaderboard: leaderboard.map((l, index) => ({
+        rank: index + 1,
+        driverId: l._id,
+        contributions: l.contributions
+      }))
+    });
+  } catch (err) {
+    console.error('LEADERBOARD ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+/**
+ * GET /api/driver/missions
+ * Returns "Missions" for drivers: products in stores that haven't been verified in 14+ days
+ */
+router.get('/missions', authRequired, async (req, res) => {
+  if (!isDbReady()) {
+    return res.status(503).json({ error: 'Database not ready' });
+  }
+  try {
+    const { storeId } = req.query;
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+    
+    // Find inventory that is "stale"
+    const query: any = {
+      $or: [
+        { observedAt: { $lt: fourteenDaysAgo } },
+        { observedAt: { $exists: false } },
+        { observedAt: null }
+      ],
+      available: true
+    };
+
+    if (storeId && mongoose.Types.ObjectId.isValid(storeId as string)) {
+      query.storeId = storeId;
+    }
+
+    const missions = await StoreInventory.find(query)
+    .populate('productId')
+    .populate('storeId')
+    .sort({ observedAt: 1 })
+    .limit(20)
+    .lean();
+
+    const result = missions.map(m => ({
+      id: m._id,
+      productName: m.productId?.name || 'Unknown Product',
+      storeName: m.storeId?.name || 'Unknown Store',
+      lastObserved: m.observedAt || m.updatedAt,
+      bountyPoints: 50, // Static bounty for now
+      sku: m.sku || m.productId?.sku
+    }));
+
+    res.json({ ok: true, missions: result });
+  } catch (err) {
+    console.error('MISSIONS ERROR:', err);
+    res.status(500).json({ error: 'Failed to fetch driver missions' });
   }
 });
 

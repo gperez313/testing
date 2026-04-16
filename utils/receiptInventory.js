@@ -22,7 +22,8 @@ export const buildInventoryUpdate = ({
   inventoryId,
   lineIndex,
   productId,
-  unmappedProductId
+  unmappedProductId,
+  isDeposit
 }) => {
   assertSingleInventoryId({ productId, unmappedProductId });
   return {
@@ -30,6 +31,7 @@ export const buildInventoryUpdate = ({
     price,
     inventoryId,
     lineIndex,
+    isDeposit: Boolean(isDeposit),
     ...(productId ? { productId } : { unmappedProductId })
   };
 };

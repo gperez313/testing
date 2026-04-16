@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ArrowLeft,
   DollarSign,
@@ -9,11 +9,15 @@ import {
   Loader2,
   Home,
   SkipForward,
-  X
+  X,
+  AlertTriangle,
+  Recycle
 } from 'lucide-react';
 import ItemNotFoundTracker from './ItemNotFoundTracker';
+import ManualItemNotFoundForm from './ManualItemNotFoundForm';
 import ReceiptCapture from './ReceiptCapture';
 import ReceiptCaptureFlow from './ReceiptCaptureFlow';
+import BottleVerificationScanner from './BottleVerificationScanner';
 // import ScannerModal from './ScannerModal';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
@@ -25,6 +29,7 @@ interface ShoppingListItem {
   price: number;
   store: string;
   storeId: string;
+  storeAddress?: string;
 }
 
 interface NotFoundItem {
@@ -33,8 +38,14 @@ interface NotFoundItem {
   quantity: number;
   price: number;
   originalStore: string;
+  originalStoreId?: string;
+  originalStoreAddress?: string;
   attemptedStores: string[];
+  attemptedStoreIds?: string[];
+  attemptedStoreAddresses?: string[];
   foundAt?: string;
+  foundAtId?: string;
+  foundAtAddress?: string;
 }
 
 interface OrderDetail {
@@ -48,6 +59,10 @@ interface OrderDetail {
   distanceFee: number;
   largeOrderFee: number;
   heavyItemFee: number;
+  returnUpcCounts?: Array<{ upc: string; quantity: number }>;
+  returnPayoutMethod?: 'CREDIT' | 'CASH';
+  estimatedReturnCredit?: number;
+  verifiedReturnCredit?: number;
   driverId?: string;
   assignedAt?: string;
   createdAt: string;
@@ -69,6 +84,10 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
   const [showReceiptCapture, setShowReceiptCapture] = useState(false);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
+  const [showManualReport, setShowManualReport] = useState(false);
+  const [showBottleVerification, setShowBottleVerification] = useState(false);
+  const [storeMissions, setStoreMissions] = useState<any[]>([]);
+  const [loadingMissions, setLoadingMissions] = useState(false);
 
   const showToast = (message: string, type: 'error' | 'success' | 'info' = 'info') => {
     setToast({ message, type });
@@ -77,6 +96,29 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
 
 
   // Use ReceiptCaptureFlow for all receipt capture/parse
+
+  const fetchStoreMissions = useCallback(async (storeId: string) => {
+    try {
+      setLoadingMissions(true);
+      const res = await fetch(`${BACKEND_URL}/api/driver/missions?storeId=${storeId}`, {
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStoreMissions(data.missions || []);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch store missions:', err);
+    } finally {
+      setLoadingMissions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentStoreId) {
+      fetchStoreMissions(currentStoreId);
+    }
+  }, [currentStoreId, fetchStoreMissions]);
 
   const fetchNotFoundItemsFromBackend = useCallback(async () => {
     try {
@@ -177,14 +219,21 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
 
   const handleItemNotFound = (item: ShoppingListItem, storeId: string) => {
     const existing = notFoundItems.find(n => n.sku === item.sku);
-    const storeName = groupedByStore[storeId]?.[0]?.store || `Store ${storeId}`;
+    const storeData = groupedByStore[storeId]?.[0];
+    const storeName = storeData?.store || `Store ${storeId}`;
+    const storeAddress = storeData?.storeAddress || item.storeAddress || '';
     
     let updated: NotFoundItem[];
     if (existing) {
       if (!existing.attemptedStores.includes(storeName)) {
         updated = notFoundItems.map(n =>
           n.sku === item.sku
-            ? { ...n, attemptedStores: [...n.attemptedStores, storeName] }
+            ? { 
+                ...n, 
+                attemptedStores: [...n.attemptedStores, storeName],
+                attemptedStoreIds: [...(n.attemptedStoreIds || []), storeId],
+                attemptedStoreAddresses: [...(n.attemptedStoreAddresses || []), storeAddress]
+              }
             : n
         );
       } else {
@@ -199,7 +248,11 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
           quantity: item.quantity,
           price: item.price,
           originalStore: storeName,
-          attemptedStores: [storeName]
+          originalStoreId: storeId,
+          originalStoreAddress: storeAddress,
+          attemptedStores: [storeName],
+          attemptedStoreIds: [storeId],
+          attemptedStoreAddresses: [storeAddress]
         }
       ];
     }
@@ -218,10 +271,39 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
     const token = localStorage.getItem('token');
     const existing = notFoundItems.find(n => n.sku === sku);
     if (!existing) return;
+
+    // Find store details if possible
+    let storeId = '';
+    let storeAddress = '';
+    for (const sId in groupedByStore) {
+      if (groupedByStore[sId][0]?.store === storeName) {
+        storeId = sId;
+        storeAddress = groupedByStore[sId][0]?.storeAddress || '';
+        break;
+      }
+    }
+
     const attempted = existing.attemptedStores.includes(storeName)
       ? existing.attemptedStores
       : [...existing.attemptedStores, storeName];
-    const updatedItem: NotFoundItem = { ...existing, foundAt: storeName, attemptedStores: attempted };
+    
+    const attemptedIds = existing.attemptedStoreIds?.includes(storeId)
+      ? existing.attemptedStoreIds
+      : [...(existing.attemptedStoreIds || []), storeId];
+
+    const attemptedAddresses = existing.attemptedStoreAddresses?.includes(storeAddress)
+      ? existing.attemptedStoreAddresses
+      : [...(existing.attemptedStoreAddresses || []), storeAddress];
+
+    const updatedItem: NotFoundItem = { 
+      ...existing, 
+      foundAt: storeName, 
+      foundAtId: storeId,
+      foundAtAddress: storeAddress,
+      attemptedStores: attempted,
+      attemptedStoreIds: attemptedIds,
+      attemptedStoreAddresses: attemptedAddresses
+    };
     const updated = notFoundItems.map(n => (n.sku === sku ? updatedItem : n));
     setNotFoundItems(updated);
     saveNotFoundItemsToStorage(updated);
@@ -232,7 +314,12 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ action: 'found', foundAt: storeName })
+        body: JSON.stringify({ 
+          action: 'found', 
+          foundAt: storeName,
+          foundAtId: storeId,
+          foundAtAddress: storeAddress
+        })
       });
     } catch (e) {
       console.warn('Failed to mark found on server:', e);
@@ -254,7 +341,7 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
     return `Store ${storeId}`;
   };
 
-  const loadNotFoundItemsFromStorage = () => {
+  const loadNotFoundItemsFromStorage = useCallback(() => {
     try {
       const orderId = order?.orderId || order?.id;
       const storageKey = `notFoundItems_${orderId}`;
@@ -265,7 +352,7 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
     } catch (err) {
       console.warn('Failed to load items from storage:', err);
     }
-  };
+  }, [order?.id, order?.orderId]);
 
   const saveNotFoundItemsToStorage = async (items: NotFoundItem[]) => {
     try {
@@ -303,6 +390,62 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
   };
 
   const totalFees = (order?.routeFee || 0) + (order?.distanceFee || 0) + (order?.largeOrderFee || 0) + (order?.heavyItemFee || 0);
+
+  const handleVerifyBottles = async (verifiedUpcs: any[], verifiedCount: number, verifiedAmount: number) => {
+    try {
+      const orderId = order?.orderId || (order as any)?.id;
+      const token = localStorage.getItem('token');
+      
+      // 1. Create a bottle return record
+      const res = await fetch(`${BACKEND_URL}/api/bottle-returns`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          orderId,
+          claimedUpcs: verifiedUpcs,
+          estimatedAmount: verifiedAmount,
+          type: order.returnPayoutMethod || 'CREDIT'
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to create bottle return record');
+      const bottleReturn = await res.json();
+
+      // 2. Verify it immediately (driver flow)
+      await fetch(`${BACKEND_URL}/api/bottle-returns/${bottleReturn._id}/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          verifiedUpcs,
+          verifiedCount,
+          verifiedAmount,
+          notes: 'Verified at delivery'
+        })
+      });
+
+      // 3. Redeem it (finalize)
+      await fetch(`${BACKEND_URL}/api/bottle-returns/${bottleReturn._id}/redeem`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+
+      showToast(`Verified ${verifiedCount} bottles. Credit: $${verifiedAmount.toFixed(2)}`, 'success');
+      setShowBottleVerification(false);
+      fetchShoppingList(); // Refresh
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-ninpo-black text-white overflow-y-auto z-40">
@@ -433,7 +576,44 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
           </div>
         </div>
 
-        {/* Shopping List by Store */}
+        {/* Bottle Returns Section */}
+        {order?.returnUpcCounts && order.returnUpcCounts.length > 0 && (
+          <div className="bg-ninpo-lime/10 border border-ninpo-lime/30 rounded-xl p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-ninpo-lime flex items-center gap-2">
+                <Recycle className="w-5 h-5" />
+                Bottle Returns
+              </h2>
+              <span className="bg-ninpo-lime text-ninpo-black text-[10px] font-black px-2 py-1 rounded-md uppercase">
+                {order.returnPayoutMethod}
+              </span>
+            </div>
+            
+            <div className="space-y-2 mb-4">
+              {order.returnUpcCounts.map((u, i) => (
+                <div key={i} className="flex justify-between text-sm">
+                  <span className="text-white/70">{u.upc}</span>
+                  <span className="font-bold">x{u.quantity}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-ninpo-lime/20">
+              <div>
+                <p className="text-[10px] text-white/50 uppercase font-bold">Estimated Credit</p>
+                <p className="text-xl font-black text-ninpo-lime">${order.estimatedReturnCredit?.toFixed(2)}</p>
+              </div>
+              <button
+                onClick={() => setShowBottleVerification(true)}
+                className="px-6 py-3 bg-ninpo-lime text-ninpo-black rounded-xl font-black uppercase tracking-widest text-xs shadow-neon"
+              >
+                Verify Bottles
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Shopping List by Store Section */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-ninpo-lime" />
@@ -465,10 +645,45 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
                 }`}
                 onClick={() => setCurrentStoreId(storeId)}
               >
-                <h3 className="text-lg font-black text-ninpo-lime mb-4 flex items-center gap-2">
-                  <Store className="w-5 h-5" />
-                  {getStoreName(storeId)}
+                <h3 className="text-lg font-black text-ninpo-lime mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Store className="w-5 h-5" />
+                    {getStoreName(storeId)}
+                  </div>
+                  {currentStoreId === storeId && storeMissions.length > 0 && (
+                     <div className="flex items-center gap-1 bg-ninpo-lime text-ninpo-black text-[8px] px-2 py-0.5 rounded-full animate-pulse">
+                        <Zap className="w-2 h-2" /> {storeMissions.length} MISSIONS
+                     </div>
+                  )}
                 </h3>
+
+                {currentStoreId === storeId && (loadingMissions || storeMissions.length > 0) && (
+                  <div className="mb-6 bg-ninpo-lime/5 border border-ninpo-lime/20 rounded-2xl p-4 space-y-3">
+                    <p className="text-[10px] font-black text-ninpo-lime uppercase tracking-widest flex items-center gap-2">
+                      <Zap className="w-3 h-3" /> While You're Here (Bounty Tasks)
+                    </p>
+                    {loadingMissions ? (
+                       <div className="flex items-center gap-2 py-2">
+                          <Loader2 className="w-3 h-3 animate-spin text-ninpo-lime" />
+                          <span className="text-[8px] font-black text-slate-500 uppercase">Scanning for high-value price gaps...</span>
+                       </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {storeMissions.slice(0, 3).map((mission) => (
+                          <div key={mission.id} className="flex items-center justify-between p-2 bg-ninpo-lime/10 rounded-xl border border-ninpo-lime/10">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-black text-white uppercase truncate">{mission.productName}</p>
+                                <p className="text-[8px] font-bold text-slate-500 uppercase">Stale for {Math.floor((Date.now() - new Date(mission.lastObserved).getTime()) / (1000 * 60 * 60 * 24))}d</p>
+                            </div>
+                            <div className="text-[10px] font-black text-ninpo-lime ml-4 whitespace-nowrap">
+                                +{mission.bountyPoints} PTS
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {storeItems.map((item: ShoppingListItem, idx: number) => (
@@ -546,7 +761,14 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
               Manual Entry
             </button>
           </div>
-          <div className="flex gap-3">
+      <div className="flex gap-3">
+            <button
+              onClick={() => setShowManualReport(true)}
+              className="flex-1 py-3 bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 rounded-xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <AlertTriangle className="w-5 h-5" />
+              Report Missing
+            </button>
             <button
               onClick={onBack}
               className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-black uppercase tracking-widest transition-all"
@@ -589,6 +811,33 @@ const DriverOrderDetail: React.FC<DriverOrderDetailProps> = ({ order, onBack }) 
               showToast('Prices updated from receipt!', 'success');
             }}
             onCancel={() => setShowReceiptCapture(false)}
+          />
+        )}
+
+        {/* Manual Item Not Found Form */}
+        {showManualReport && (
+          <ManualItemNotFoundForm
+            isOpen={showManualReport}
+            onClose={() => setShowManualReport(false)}
+            currentStoreId={currentStoreId || undefined}
+            availableStores={Object.entries(groupedByStore).map(([id, items]) => ({
+              id,
+              name: items[0]?.store || `Store ${id}`,
+              address: items[0]?.storeAddress || ''
+            }))}
+            onSubmit={(item) => {
+              handleItemNotFound(item as any, item.storeId);
+              showToast(`Reported ${item.name} as missing`, 'success');
+            }}
+          />
+        )}
+
+        {/* Bottle Verification Scanner */}
+        {showBottleVerification && order.returnUpcCounts && (
+          <BottleVerificationScanner
+            claimedUpcs={order.returnUpcCounts}
+            onVerify={handleVerifyBottles}
+            onCancel={() => setShowBottleVerification(false)}
           />
         )}
       </div>

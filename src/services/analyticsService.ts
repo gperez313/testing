@@ -174,7 +174,7 @@ class AnalyticsService {
       }
       
       localStorage.setItem(key, JSON.stringify(events));
-    } catch (e) {
+    } catch (_e) {
       // Silently fail if localStorage is full or unavailable
     }
   }

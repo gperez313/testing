@@ -22,7 +22,7 @@ const parseJsonObject = raw => {
   try {
     const parsed = JSON.parse(trimmed);
     return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 };

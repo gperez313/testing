@@ -1170,13 +1170,6 @@ const ManagementReceipt: React.FC<ManagementReceiptProps> = ({
   const activeJobs = receiptFlow === 'completed' ? completedWorkflowJobs : pendingWorkflowJobs;
   const visibleJobs = activeJobs.slice(0, visibleJobCount);
   const canLoadMoreJobs = activeJobs.length > visibleJobCount;
-  const parseStateLabels: Record<string, { label: string; className: string }> = {
-    queued: { label: 'Parse queued', className: 'bg-slate-700/60 text-slate-100 border-slate-400/50' },
-    parsing: { label: 'Parsing', className: 'bg-blue-700/50 text-blue-100 border-blue-300/50' },
-    ready_for_review: { label: 'Needs review', className: 'bg-amber-700/50 text-amber-100 border-amber-300/50' },
-    failed: { label: 'Parse failed', className: 'bg-red-700/50 text-red-100 border-red-300/50' },
-    completed: { label: 'Completed', className: 'bg-green-700/50 text-green-100 border-green-300/50' }
-  };
 
   useEffect(() => {
     if (activeJobs.length <= 20) {
@@ -1187,6 +1180,14 @@ const ManagementReceipt: React.FC<ManagementReceiptProps> = ({
   }, [activeJobs.length]);
 
   const tabContent = useMemo(() => {
+    const parseStateLabels: Record<string, { label: string; className: string }> = {
+      queued: { label: 'Parse queued', className: 'bg-slate-700/60 text-slate-100 border-slate-400/50' },
+      parsing: { label: 'Parsing', className: 'bg-blue-700/50 text-blue-100 border-blue-300/50' },
+      ready_for_review: { label: 'Needs review', className: 'bg-amber-700/50 text-amber-100 border-amber-300/50' },
+      failed: { label: 'Parse failed', className: 'bg-red-700/50 text-red-100 border-red-300/50' },
+      completed: { label: 'Completed', className: 'bg-green-700/50 text-green-100 border-green-300/50' }
+    };
+
     if (receiptFlow === 'capture') {
       return (
         <div className="space-y-6">
@@ -1642,7 +1643,6 @@ const ManagementReceipt: React.FC<ManagementReceiptProps> = ({
     isReceiptFlowOpen,
     stores,
     fmtTime,
-    parseJobs,
     isLoadingJobs,
     jobsError,
     selectedJob,
@@ -1659,10 +1659,26 @@ const ManagementReceipt: React.FC<ManagementReceiptProps> = ({
     forceUpcOverride,
     finalStoreId,
     receiptApprovalNotes,
-    approvalStatus.hasBlocking,
-    approvalStatus.store.blocking,
-    approvalStatus.store.advisory,
     isProcessing,
+    activeJobs.length,
+    approvalPanelExpandedByJobId,
+    approvalStatus,
+    canManageProducts,
+    canOverridePriceLocks,
+    completedWorkflowJobs.length,
+    finalStoreDraft.storeCandidate,
+    finalStoreMode,
+    ignorePriceLocks,
+    pendingWorkflowJobs.length,
+    receiptApprovalIdempotencyKey,
+    receiptApprovalItems,
+    receiptIngestionGate,
+    receiptOcrProviderSummary,
+    receiptQueueStatus,
+    settings,
+    updateReceiptApprovalItemAction,
+    updateReceiptApprovalItemUpc,
+    updateStoreDraft,
     handleReceiptCaptured,
     handleParse,
     handleRetryParse,
@@ -1681,7 +1697,6 @@ const ManagementReceipt: React.FC<ManagementReceiptProps> = ({
     loadParseJobs,
     handleApproveReceipt,
     handleRejectParseJob,
-    visibleJobCount,
     visibleJobs,
     canLoadMoreJobs,
     approvalOutcomeByJobId

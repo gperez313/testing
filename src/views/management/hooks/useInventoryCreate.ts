@@ -6,9 +6,7 @@ import { DEFAULT_NEW_PRODUCT, OFF_LOOKUP_FALLBACK_MESSAGE } from '../constants';
 import {
   buildNutritionNoteFromOff,
   getOffNutritionEntries,
-  parseOffQuantity,
-  shouldFillNumber,
-  shouldFillText
+  parseOffQuantity
 } from '../utils';
 import type { OffLookupProduct } from '../utils';
 
@@ -276,7 +274,7 @@ export const useInventoryCreate = ({
         applyOffLookup(data.product);
         setOffLookupStatus('found');
         setOffLookupMessage('Auto-filled from Open Food Facts (editable).');
-      } catch (e) {
+      } catch (_e) {
         if (offLookupRequestIdRef.current !== requestId) return;
         setOffLookupStatus('error');
         setOffLookupMessage(OFF_LOOKUP_FALLBACK_MESSAGE);
@@ -464,11 +462,12 @@ export const useInventoryCreate = ({
     resetCreateForm,
     scannerMode,
     setProducts,
-    setScannerModalOpen,
     setScannerMode,
     upcDraft,
     upcItemsRef,
-    scannedUpcForCreation
+    scannedUpcForCreation,
+    onProductCreated,
+    products
   ]);
 
   const handleScannerScan = useCallback(

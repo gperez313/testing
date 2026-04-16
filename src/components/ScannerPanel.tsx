@@ -244,6 +244,11 @@ const ScannerPanel = forwardRef<any, ScannerPanelProps>(({
   const playBeep = useCallback(() => {
     if (typeof window === 'undefined') return;
     try {
+      // Haptic feedback
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50);
+      }
+
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }

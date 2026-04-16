@@ -559,11 +559,8 @@ const CartDrawer: React.FC<CartDrawerProps> = ({
   const deliveryCreditEligibleTiers: UserTier[] = [UserTier.SILVER, UserTier.GOLD];
   if (allowPlatinumTier) deliveryCreditEligibleTiers.push(UserTier.PLATINUM);
   if (allowGreenTier) deliveryCreditEligibleTiers.push(UserTier.GREEN);
-  const creditsCoverDelivery = deliveryCreditEligibleTiers.includes(activeTier);
-  const creditEligibleCents = creditsCoverDelivery
-    ? subtotalCents + activeRouteFeeCents + activeDistanceFeeCents
-    : subtotalCents;
-
+  const creditEligibleCents = subtotalCents + depositCents + activeRouteFeeCents + activeLargeOrderFeeCents + activeHeavyItemFeeCents;
+  
   const creditAppliedCents =
     payoutMethod === 'CASH' ? 0 : Math.min(estimatedReturnCreditCents, creditEligibleCents);
 

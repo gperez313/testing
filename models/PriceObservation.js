@@ -50,6 +50,10 @@ const priceObservationSchema = new mongoose.Schema({
   },
   workflowType: {
     type: String
+  },
+  isDeposit: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

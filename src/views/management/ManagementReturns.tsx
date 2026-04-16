@@ -164,7 +164,10 @@ const ManagementReturns: React.FC<ManagementReturnsProps> = ({
 
                 <div className="bg-ninpo-lime/5 rounded-[2rem] p-8 border border-ninpo-lime/20 space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-ninpo-lime">Verified Counts</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-ninpo-lime">Verified Counts</p>
+                      <span className="px-2 py-0.5 rounded-md bg-ninpo-lime/20 text-ninpo-lime text-[8px] font-black uppercase tracking-widest">MI 10¢</span>
+                    </div>
                     <button
                       onClick={() => openUnifiedScannerModal(ScannerMode.CUSTOMER_RETURN_SCAN)}
                       className="p-2 rounded-xl bg-ninpo-lime text-ninpo-black hover:scale-110 transition-all"

@@ -18,7 +18,6 @@ import {
   sumReturnCredits,
   ownerRequired,
   releaseCreditAuthorization,
-  restockOrderItems, // eslint-disable-line no-unused-vars
   voidStripeAuthorizationBestEffort
 } from '../utils/helpers.js';
 import { isDbReady } from '../db/connect.js';
